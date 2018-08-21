@@ -1,6 +1,3 @@
-
-
-
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -31,6 +28,7 @@ void kill(Matrix<double> *rr){
   delete rr;
   rr=NULL;
 }
+
 double addProtect2(double a,double b){
   //function does: log(exp(a)+exp(b)) while protecting for underflow
   double maxVal;// = std::max(a,b));
@@ -57,7 +55,6 @@ double addProtect3(double a,double b, double c){
   return log(sumVal) + maxVal;
 }
 
-
 double getMax(double a,double b, double c){ 
     //get the maximum value of a, b and c
     double maxVal;// = std::max(a,std::max(b,c));
@@ -69,10 +66,6 @@ double getMax(double a,double b, double c){
       maxVal=c;
     return maxVal;
 }
-
-
-
-
 
 std::vector<double> getArray(const char *name){
   std::vector<double> ret;
@@ -101,6 +94,7 @@ std::vector<double> getArray(const char *name){
   gzclose(gz);
   return ret;
 }
+
 Matrix<double> getMatrix(const char *name){
   if(!fexists(name)){
     fprintf(stderr,"\t-> Problems opening file: %s\n",name);

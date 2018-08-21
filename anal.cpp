@@ -33,32 +33,38 @@ pars *init_pars(size_t l,size_t ncov,int model,int maxInter,double tole,std::vec
   p->qvec=new double[l];
   //p->mafs=new double[l];
   p->covs=initMatrix(l,ncov);
-  p->design=initMatrix(4*l,ncov+2);
+
+  // emil - added 3rd column for alternate allele
+  //p->design=initMatrix(4*l,ncov+2);
+  p->design=initMatrix(4*l,ncov+3);
   p->pheno = new double[4*l];
   p->p_sCg = new double[4*l];
   p->bufstr.s=NULL;p->bufstr.l=p->bufstr.m=0;
   p->tmpstr.s=NULL;p->tmpstr.l=p->tmpstr.m=0;
   
-  ksprintf(&p->bufstr,"Chromo\tPosition\tnInd\tf1\tf2\tllh(M1)\tllh(M2)\tllh(M3)\tllh(M4)\tllh(M5)\tb1(M1)\tb2(M1)\tb1(M2)\tb2(M3)\tb(M4)\n");
+  ksprintf(&p->bufstr,"Chromo\tPosition\tnInd\tf1\tf2\tllh(M0)\tllh(M1)\tllh(M2)\tllh(M3)\tllh(M4)\tllh(M5)\tb1(M1)\tb2(M1)\tb1(M2)\tb2(M3)\tb(M4)\n");
   
   //branch
-  p->model =model;
-  p->start = new double[l];
-  p->start0 = new double[l];
+  p->model = model;
+  // this one has one starting guess for 3 coefs and covar + sd at the end, index ncov+4
+  p->start = new double[ncov+4];
+  p->start0 = new double[ncov+4];
   p->ysCgs = initMatrix(l,ncov+2+4);//now we are just allocating enough enough
   p->maxIter = maxInter;
   p->tol = tole;
 
   //plugin a start
   for(int i=0;i<start.size();i++)
-    p->start[i]= start[i];
+    p->start[i] = start[i];
   if(start.size()==0){
     //make better start guess at some point
     void rstart(double *,size_t);
-    rstart(p->start,ncov+2);//<-will put sd at p->start[p->covs+dy+2]
+    // emil - will put in random numbers as starting guess
+    rstart(p->start,ncov+3);//<-will put sd at p->start[p->covs+dy+2]
   }
   //copy it to the start0 which will be copied to start for each new site
-  memcpy(p->start0,p->start,sizeof(double)*(ncov+3));
+  // emil has to be + 4, because also needs to copy sd(y) - last value of start
+  memcpy(p->start0,p->start,sizeof(double)*(ncov+4));
   return p;
 }
 
@@ -69,7 +75,7 @@ double sd(double *a,int l){
 
   double u = ts/(1.0*l);
   assert(u!=0);
-  ts =0;
+  ts = 0;
   for(int i=0;i<l;i++)
     ts += (a[i]-u)*(a[i]-u);
   return ts/(1.0*(l-1.0));
@@ -80,6 +86,7 @@ void rstart(double *ary,size_t l){
    ary[i] = drand48()*2-1;
    //  fprintf(stderr,"ary[%d]:%f\n",i,ary[i]);
   }
+  // emil - for sd estimate use sd of y
   ary[l]=sd(ary,l);
 }
 
@@ -125,10 +132,16 @@ void wrap(const plink *plnk,const std::vector<double> &phe,const std::vector<dou
     for(int j=0;j<plnk->x;j++)
       d[i][j]=plnk->d[j][i];
   }
+
+
   
   pars *p=init_pars(plnk->x,cov.dy,model,maxIter,tol,start);//we prep for threading. By using encapsulating all data need for a site in  struct called pars
 
   for(int y=0;y<plnk->y;y++){//loop over sites
+
+    // emil
+    if(y>0){ exit(0); }
+    
     fprintf(stderr,"Parsing site:%d\r",y);
     int cats2[4] = {0,0,0,0};
    
