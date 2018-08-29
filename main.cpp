@@ -3,12 +3,11 @@ Lines project:
 ./line  -p plinkTest -o out -c plinkTest.covs -y plinkTest.y -a plinkTest.Q1 -f plinkTest.f1 
 */
 
-
-
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <cassert>
+#include <ctime>
 #include "readplink.h"
 #include "analysisFunction.h"
 #include "anal.h"
@@ -16,12 +15,12 @@ Lines project:
 //stupid little function to read 1,3 column of a bim file
 std::vector<char*> readBim(char *str){
   
-  char *fname =(char*) malloc(strlen(str)+5);
+  char *fname = (char*) malloc(strlen(str)+5);
   strcpy(fname,str);
   strcpy(fname+strlen(fname),".bim");
   
   int lens = 4096;
-  char *buf =(char*) malloc(lens);
+  char *buf = (char*) malloc(lens);
 
   gzFile gz = Z_NULL;
   if(((gz=gzopen(fname,"rb")))==Z_NULL){
@@ -45,7 +44,6 @@ std::vector<char*> readBim(char *str){
   return ret;
 }
 
-
 void print_info(FILE *fp){
   fprintf(fp, "\n");
   fprintf(fp, "Usage: line  [options] \n");
@@ -54,14 +52,16 @@ void print_info(FILE *fp){
   fprintf(fp, "   -o <filename>       output filename\n");
   fprintf(fp, "   -c <filename>       covariance matrix filename\n");
   fprintf(fp, "   -s <filename>       phenotypes\n");
-  fprintf(fp, "   -Q <filename>       admixproportions (for source pop1)\n");
-  fprintf(fp, "   -f <filename>       allele frequencies\n");
+  fprintf(fp, "   -a <filename>       admixproportions (for source pop1)\n");
+  fprintf(fp, "   -Q <filename>       .Q file from ADMIXTURE\n");
+  fprintf(fp, "   -f <filename>       allele frequencies (.P file)\n");
   fprintf(fp, "   -m <INTEGER>        model 0=add 1=rec\n");
   fprintf(fp, "   -b <filename>       file containing the start\n");
   fprintf(fp, "   -i <UINTEGER>       maximum iterations\n");
   fprintf(fp, "   -t <FLOAT>          tolerance for breaking EM\n");
   fprintf(fp, "   -r <FLOAT>          seed for rand\n");
   fprintf(fp, "   -P <INT>            number of threads\n");
+  fprintf(fp, "   -B <INT>            balacing start guesses, same number of pos. and neg. (0=no, 1=yes)\n");
   fprintf(fp, "\n");
 }
 
@@ -72,7 +72,6 @@ int main(int argc,char **argv){
     print_info(fp);
     return 0;
 }
-
   
   char *pname = NULL;
   char *outname = NULL;
@@ -80,13 +79,18 @@ int main(int argc,char **argv){
   char *phename = NULL;
   char *adname = NULL;
   char *freqname = NULL;
+  char *qname = NULL;
   char *startname = NULL;
   int model = 0;
   int mIter = 10;
-  double tol = 1e-8;
+  //double tol = 1e-8;
+  double tol = 1e-12;
   int n;
-  int seed = 100;
+  //int seed = 100;
+  //emil - I will give random seed:
+  int seed = time(NULL);
   int nThreads = 1;
+  int balanceStart = 0;
 
 
   argv++;
@@ -101,6 +105,8 @@ int main(int argc,char **argv){
     else if(strcmp(*argv,"-y")==0) phename=*++argv;
     // ancestry file
     else if(strcmp(*argv,"-a")==0) adname=*++argv;
+    //.Q file
+    else if(strcmp(*argv,"-Q")==0) qname=*++argv;
     // pop specific freqs
     else if(strcmp(*argv,"-f")==0) freqname=*++argv;
     // which model to use (0: add, 1: rec)
@@ -114,7 +120,10 @@ int main(int argc,char **argv){
     // random seed
     else if(strcmp(*argv,"-r")==0) seed=atoi(*++argv); 
     // number of threads
-    else if(strcmp(*argv,"-P")==0) nThreads=atoi(*++argv); 
+    else if(strcmp(*argv,"-P")==0) nThreads=atoi(*++argv);
+    // balance starting values, meaning having almost same neg. and pos.
+    else if(strcmp(*argv,"-B")==0) balanceStart=atoi(*++argv); 
+
     else{
       fprintf(stderr,"Unknown arg:%s\n",*argv);
       FILE *fp=stderr;
@@ -153,34 +162,37 @@ int main(int argc,char **argv){
   */
 
 #if 1
-  if(!outname||!pname||!covname||!phename||!adname||!freqname){
-  FILE *fp=stderr;
-  fprintf(fp, "\n");
-  fprintf(fp, "Usage: line  [options] \n");
-  fprintf(fp, "Options:\n");
-  fprintf(fp, "   -p \'%s\'\t\tplink prefix filename\n",pname);
-  fprintf(fp, "   -o \'%s\'\t\toutput filename\n",outname);
-  fprintf(fp, "   -c \'%s\'\t\tcovariance matrix filename\n",covname);
-  fprintf(fp, "   -y \'%s\'\t\tphenotypes\n",phename);
-  fprintf(fp, "   -a \'%s\'\t\tadmixproportions (for source pop1)\n",adname);
-  fprintf(fp, "   -f \'%s\'\t\tallele frequencies\n",freqname);
-  fprintf(fp, "\n optional arguments:\n");
-  fprintf(fp, "   -m \'%d\'\t\tmodel 0=add 1=rec\n",model);
-  fprintf(fp, "   -b \'%s\'\t\tfile containing the start\n",startname);
-  fprintf(fp, "   -i \'%d\'\t\tmax number of iterations\n",mIter);
-  fprintf(fp, "   -r \'%d\'\t\trandom seed\n",seed);
-  fprintf(fp, "   -t \'%e\'\tfloat for breaking EM update\n",tol);
-  fprintf(fp, "   -P \'%d\'\t\tnumber of threads\n",nThreads);
-  fprintf(fp, "\n");
-  fprintf(stderr,"All files must be specified: -p -c -y -a -f -o\n");
-  //    print_info(stderr);
-  return 1;
+  if(!outname||!pname||!covname||!phename||(!adname & !qname)||!freqname){
+    FILE *fp=stderr;
+    fprintf(fp, "\n");
+    fprintf(fp, "Usage: line  [options] \n");
+    fprintf(fp, "Options:\n");
+    fprintf(fp, "   -p \'%s\'\t\tplink prefix filename\n",pname);
+    fprintf(fp, "   -o \'%s\'\t\toutput filename\n",outname);
+    fprintf(fp, "   -c \'%s\'\t\tcovariance matrix filename\n",covname);
+    fprintf(fp, "   -y \'%s\'\t\tphenotypes\n",phename);
+    fprintf(fp, "   -a \'%s\'\t\tadmixproportions (for source pop1)\n",adname);
+    fprintf(fp, "   -Q \'%s\'\t\t.Q file from ADMIXTURE\n",qname);
+    fprintf(fp, "   -f \'%s\'\t\tallele frequencies\n",freqname);
+    fprintf(fp, "\n optional arguments:\n");
+    fprintf(fp, "   -m \'%d\'\t\tmodel 0=add 1=rec\n",model);
+    fprintf(fp, "   -b \'%s\'\t\tfile containing the start\n",startname);
+    fprintf(fp, "   -i \'%d\'\t\tmax number of iterations\n",mIter);
+    fprintf(fp, "   -r \'%d\'\t\trandom seed\n",seed);
+    fprintf(fp, "   -t \'%e\'\tfloat for breaking EM update\n",tol);
+    fprintf(fp, "   -P \'%d\'\t\tnumber of threads\n",nThreads);
+    fprintf(fp, "   -B \'%d\'\t\tbalacing start guesses, so same number of pos. and neg. (0=no, 1=yes)\n",balanceStart);
+    fprintf(fp, "\n");
+    fprintf(stderr,"All files must be specified: -p -c -y -a -f -o\n");
+    //    print_info(stderr);
+    return 1;
   }  
 #endif
   
-
-  srand48(seed);
-
+  //srand48(seed);
+  std::srand(seed);
+  fprintf(stderr,"Seed is: %i\n",seed);
+  
   FILE *outFile = fopen(outname, "w");
   plink *p = readplink(pname);  
   std::vector<char *> loci = readBim(pname);
@@ -190,11 +202,27 @@ int main(int argc,char **argv){
     return 0;
   }
   std::vector<double> pheno = getArray(phename);
-  std::vector<double> adprop = getArray(adname);
+  std::vector<double> adprop;
+  if(qname!=NULL){
+    Matrix<double> Q = getMatrix(qname);
+    adprop.reserve(Q.dx);
+    // I just read the first column of the .Q file into the adprop vector
+    for(int i=0;i<Q.dx;i++){
+      adprop[i]=Q.d[i][0];      
+    }
+  }  else if(adname!=NULL){
+    // make so can give .Q file instead of just 1 column file...
+    adprop = getArray(adname);
+  } else{
+    fprintf(stderr,"ancprobs file or .Q file MUST be provided!\n");
+    exit(1);
+  }
+
   Matrix<double> f = getMatrix(freqname);
   std::vector<double> s = getArray(startname);
   assert(model==0 || model==1);
-  wrap(p,pheno,adprop,f,model,s,cov,mIter,tol,loci,nThreads,outFile);
+  assert(balanceStart==0 || balanceStart==1);
+  wrap(p,pheno,adprop,f,model,s,cov,mIter,tol,loci,nThreads,outFile,balanceStart);
 
   //cleanup
   kill_plink(p); 
