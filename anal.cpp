@@ -12,13 +12,14 @@ void kill_pars(pars *p,size_t l){
   kill(p->covs);
   kill(p->design);
   kill(p->ysCgs);
-
+  
   delete [] p->pheno;
   delete [] p->p_sCg;
   delete [] p->start;
   delete [] p->start0;
+  
   free(p->bufstr.s);free(p->tmpstr.s);
-  delete p;
+  delete p;  
   p=NULL;
 }
 
@@ -69,8 +70,12 @@ void rstart2(double *ary,size_t l, const std::vector<double> &phe, double fMin, 
     ary[i] = fMin + f * (fMax - fMin);
    //  fprintf(stderr,"ary[%d]:%f\n",i,ary[i]);
   }
+
   
-  // try to have same number of neg and pos values  
+
+  // try to have same number of neg and pos values
+  // THIS IS NOT THE PROBLEM, problem is high covariate values
+  // getting too high starting values
   if(balanceStart==1){
     int pos = 0; int neg = 0;
     for(int i=0;i<l;i++){
@@ -100,36 +105,42 @@ void rstart2(double *ary,size_t l, const std::vector<double> &phe, double fMin, 
   }
   
   // emil - for sd estimate use sd of y
-  ary[l]=sd2(phe);  
+  ary[l]=sd2(phe);
+
 }
 
 
-pars *init_pars(size_t l,size_t ncov,int model,int maxInter,double tole,std::vector<double> &start, const std::vector<double> &phe, int balanceStart){
+pars *init_pars(size_t l,size_t ncov,int model,int maxInter,double tole,std::vector<double> &start, const std::vector<double> &phe, int balanceStart, int regression){
   pars *p=new pars;
   p->len=l;
+  // also intercept (which is not specified)
+  ncov++;
   p->ncov=ncov;
   p->gs=new char[l];
   p->ys=new double[l];
   p->qvec=new double[l];
   //p->mafs=new double[l];
+  // has to have column of 1s
   p->covs=initMatrix(l,ncov);
 
   // emil - added 3rd column for alternate allele
-  //p->design=initMatrix(4*l,ncov+2);
- 
+  //p->design=initMatrix(4*l,ncov+2); 
   p->pheno = new double[4*l];
   p->p_sCg = new double[4*l];
   p->bufstr.s=NULL;p->bufstr.l=p->bufstr.m=0;
   p->tmpstr.s=NULL;p->tmpstr.l=p->tmpstr.m=0;
 
   p->model = model;
+  p->regression = regression;
 
   if(model==0){
     // for the add model where design matrix has B1, B2, A1, covs
     // start has the same + sd(y) - so one longer than row in design matrix    
     ksprintf(&p->bufstr,"Chromo\tPosition\tnInd\tf1\tf2\tllh(M0)\tllh(M1)\tllh(M2)\tllh(M3)\tllh(M4)\tllh(M5)\tb1(M1)\tb2(M1)\tb1(M2)\tb2(M3)\tb(M4)\n");
+
+    // also has to have intercept
+    p->design=initMatrix(4*l,ncov+3);
     
-    p->design=initMatrix(4*l,ncov+3);   
     // starting values for 3 coefs and covar + sd at the end (index: ncov+4)
     p->start = new double[ncov+4];
     p->start0 = new double[ncov+4];
@@ -139,14 +150,15 @@ pars *init_pars(size_t l,size_t ncov,int model,int maxInter,double tole,std::vec
     // start has the same + sd(y) - so one longer than row in design matrix     
     ksprintf(&p->bufstr,"Chromo\tPosition\tnInd\tf1\tf2\tllh(R0)\tllh(R1)\tllh(R2)\tllh(R3)\tllh(R4)\tllh(R5)\tllh(R6)\tllh(R7)\tb1(R1)\tb2(R1)\tbm(R1)\tb1(R2)\tb2m(R2)\tb1m(R3)\tb2(R3)\tb1(R4)\tb2(R5)\tb(R6)\n");
 
+    // also has to have intercept
     p->design=initMatrix(4*l,ncov+5);    
     // this one has one starting guess for 5 coefs and covar + sd at the end, index ncov+6
     p->start = new double[ncov+6];
     p->start0 = new double[ncov+6];
     
   }
-  
-  p->ysCgs = initMatrix(l,ncov+2+4);//now we are just allocating enough enough
+   
+  p->ysCgs = initMatrix(l,ncov+6);//now we are just allocating enough enough
   p->maxIter = maxInter;
   p->tol = tole;
 
@@ -161,15 +173,25 @@ pars *init_pars(size_t l,size_t ncov,int model,int maxInter,double tole,std::vec
       //rstart(p->start,ncov+3,phe);//<-will put sd at p->start[p->covs+dy+1]
       rstart2(p->start,ncov+3,phe,-1,1,balanceStart);//<-will put sd at p->start[p->covs+dy+1]
 
+      //if logisitc regression set last start value to 0
+      if(p->regression==1){
+	p->start[ncov+3]=0;
+      }
+      
       fprintf(stderr,"Starting values are:\t");
       for(int i=0;i<ncov+4;i++){
-	fprintf(stderr,"%f",p->start[i]);
+	fprintf(stderr, "%f ",p->start[i]);
       }
       fprintf(stderr,"\n");
     } else{
       //rstart(p->start,ncov+5,phe);//<-will put sd at p->start[p->covs+dy+1]
       rstart2(p->start,ncov+5,phe,-1,1,balanceStart);//<-will put sd at p->start[p->covs+dy+1]
-      
+
+      //if logisitc regression set last start value to 0
+      if(p->regression==1){
+	p->start[ncov+5]=0;
+      }
+
       fprintf(stderr,"Starting values are:\t");
       for(int i=0;i<ncov+6;i++){
 	fprintf(stderr," %f ",p->start[i]);
@@ -179,6 +201,7 @@ pars *init_pars(size_t l,size_t ncov,int model,int maxInter,double tole,std::vec
     }
   }
 
+  
   //copy it to the start0 which will be copied to start for each new site
   // emil has to be + 4, because also needs to copy sd(y) - last value of start
 
@@ -194,6 +217,8 @@ pars *init_pars(size_t l,size_t ncov,int model,int maxInter,double tole,std::vec
 void set_pars(pars*p,char *g,const std::vector<double> &phe,const std::vector<double> &ad , double *freq,std::vector<double> start,Matrix<double> &cov,char *site){
 
   p->len=0;
+  // check if all values of first column in cov file is 1
+  int interceptChecker = 0;
   for(int i=0;i<phe.size();i++){
       if(g[i]!=3){
 	// not reading in those with missing genotype!!
@@ -201,15 +226,22 @@ void set_pars(pars*p,char *g,const std::vector<double> &phe,const std::vector<do
 	p->ys[p->len] = phe[i];
 
 	p->qvec[p->len] = ad[i];
-	for(int c=0;c<cov.dy;c++){
-	  p->covs->d[p->len][c] = cov.d[i][c];
+
+	if(cov.d[i][0]==1){
+	  interceptChecker++;
+	}
+	// only has number of covariates, in covariates file
+	for(int c=1;c<=cov.dy;c++){	     
+	  p->covs->d[p->len][0] = 1;
+	  p->covs->d[p->len][c] = cov.d[i][c-1];
 	}
 	p->len++;
     }
   }
   
   p->covs->dx=p->len;
-  p->covs->dy=cov.dy;
+  // add extra covariate of intercept
+  p->covs->dy=cov.dy+1;
   p->mafs = freq;
   
   for(int i=0;i<p->len;i++){
@@ -220,12 +252,19 @@ void set_pars(pars*p,char *g,const std::vector<double> &phe,const std::vector<do
 
   }
 
-  memcpy(p->start,p->start0,sizeof(double)*(p->covs->dy+3));
+  // if add model - copy all starting values ncov + 4
+  if(p->model==0){
+    memcpy(p->start,p->start0,sizeof(double)*(p->covs->dy+4));
+    // if rec model - copy all starting values ncov + 6
+  } else{
+    memcpy(p->start,p->start0,sizeof(double)*(p->covs->dy+6));
+  }
+
   ksprintf(&p->bufstr,"%s%d\t%f\t%f\t",site,p->len,p->mafs[0],p->mafs[1]);
 }
 
 
-void wrap(const plink *plnk,const std::vector<double> &phe,const std::vector<double> &ad,Matrix<double> &freq,int model,std::vector<double> start,Matrix<double> &cov,int maxIter,double tol,std::vector<char*> &loci,int nThreads,FILE *outFile, int balanceStart){
+void wrap(const plink *plnk,const std::vector<double> &phe,const std::vector<double> &ad,Matrix<double> &freq,int model,std::vector<double> start,Matrix<double> &cov,int maxIter,double tol,std::vector<char*> &loci,int nThreads,FILE *outFile, int balanceStart, int regression){
   //fprintf(stderr,"\t-> plinkdim: x->%lu y->%lu\n",plnk->x,plnk->y);
   //return ;
   char **d = new char*[plnk->y];//transposed of plink->d. Not sure what is best, if we filterout nonmissing anyway.
@@ -235,7 +274,7 @@ void wrap(const plink *plnk,const std::vector<double> &phe,const std::vector<dou
       d[i][j]=plnk->d[j][i];
   }
   //we prep for threading. By using encapsulating all data need for a site in struct called pars
-  pars *p=init_pars(plnk->x,cov.dy,model,maxIter,tol,start,phe,balanceStart);
+  pars *p=init_pars(plnk->x,cov.dy,model,maxIter,tol,start,phe,balanceStart,regression);
 
   for(int y=0;y<plnk->y;y++){//loop over sites
     
@@ -280,10 +319,11 @@ void wrap(const plink *plnk,const std::vector<double> &phe,const std::vector<dou
   }
   fprintf(stderr,"\t-> done\n");
   kill_pars(p,plnk->x);
-
+ 
   for(int i=0;i<plnk->y;i++)
     delete [] d[i];
   delete [] d;
+
 }
 
 void print(pars *p,FILE *fp){

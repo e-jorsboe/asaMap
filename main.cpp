@@ -56,6 +56,7 @@ void print_info(FILE *fp){
   fprintf(fp, "   -Q <filename>       .Q file from ADMIXTURE\n");
   fprintf(fp, "   -f <filename>       allele frequencies (.P file)\n");
   fprintf(fp, "   -m <INTEGER>        model 0=add 1=rec\n");
+  fprintf(fp, "   -l <INTEGER>        regression 0=linear regression, 1=logistic regression\n");
   fprintf(fp, "   -b <filename>       file containing the start\n");
   fprintf(fp, "   -i <UINTEGER>       maximum iterations\n");
   fprintf(fp, "   -t <FLOAT>          tolerance for breaking EM\n");
@@ -82,9 +83,12 @@ int main(int argc,char **argv){
   char *qname = NULL;
   char *startname = NULL;
   int model = 0;
+  int regression = 0;
   int mIter = 10;
-  //double tol = 1e-8;
-  double tol = 1e-12;
+  double tol = 1e-8;
+  //emil suggestion caused had not realised
+  //number of mIter so different from R-code
+  //double tol = 1e-12;
   int n;
   //int seed = 100;
   //emil - I will give random seed:
@@ -96,7 +100,7 @@ int main(int argc,char **argv){
   argv++;
   while(*argv){
     // reading in arguments
-    if(strcmp(*argv,"-p")==0) pname=*++argv; //name / char arrays
+    if(strcmp(*argv,"-p")==0) pname=*++argv; 
     // outfile
     else if(strcmp(*argv,"-o")==0) outname=*++argv;
     // covariate file
@@ -110,7 +114,9 @@ int main(int argc,char **argv){
     // pop specific freqs
     else if(strcmp(*argv,"-f")==0) freqname=*++argv;
     // which model to use (0: add, 1: rec)
-    else if(strcmp(*argv,"-m")==0) model=atoi(*++argv); //int - atoi - char array to integer
+    else if(strcmp(*argv,"-m")==0) model=atoi(*++argv); 
+    // linear/logistic regression
+    else if(strcmp(*argv,"-l")==0) regression=atoi(*++argv);
     // file with starting points
     else if(strcmp(*argv,"-b")==0) startname=*++argv; 
     // number of iterations to run for the EM algorithm
@@ -176,6 +182,7 @@ int main(int argc,char **argv){
     fprintf(fp, "   -f \'%s\'\t\tallele frequencies\n",freqname);
     fprintf(fp, "\n optional arguments:\n");
     fprintf(fp, "   -m \'%d\'\t\tmodel 0=add 1=rec\n",model);
+    fprintf(fp, "   -m \'%d\'\t\tregression 0=linear 1=logistic\n",regression);
     fprintf(fp, "   -b \'%s\'\t\tfile containing the start\n",startname);
     fprintf(fp, "   -i \'%d\'\t\tmax number of iterations\n",mIter);
     fprintf(fp, "   -r \'%d\'\t\trandom seed\n",seed);
@@ -221,19 +228,24 @@ int main(int argc,char **argv){
   Matrix<double> f = getMatrix(freqname);
   std::vector<double> s = getArray(startname);
   assert(model==0 || model==1);
+  assert(regression==0 || regression==1);
   assert(balanceStart==0 || balanceStart==1);
-  wrap(p,pheno,adprop,f,model,s,cov,mIter,tol,loci,nThreads,outFile,balanceStart);
+  wrap(p,pheno,adprop,f,model,s,cov,mIter,tol,loci,nThreads,outFile,balanceStart,regression);
 
   //cleanup
-  kill_plink(p); 
+  kill_plink(p);
+
+  /*
+  // emil changed reading in of arguments
   free(pname);
   free(outname);
   free(covname);
   free(phename);
-  free(adname);
-
+  free(adname);  
   free(freqname);
   free(startname);
+  */
+  
   for(int i=0;i<cov.dx;i++){
     delete [] cov.d[i];
   }

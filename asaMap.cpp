@@ -8,6 +8,8 @@
 #include <cfloat>
 #include "kstring.h"
 
+// fits a linear model using weighted least squares, 4 observations per individual -
+// up to 4 possible states, when geno is known
 void getFit(double* start, double* Y, double** covMatrix, const double* weights, int nInd4, int nEnv, int df){
    //  fprintf(stderr,"%s: nInd4:%d nEnv:%d df:%d\n",__FUNCTION__,nInd4,nEnv,df);
 
@@ -16,11 +18,11 @@ void getFit(double* start, double* Y, double** covMatrix, const double* weights,
      Y is the responce (nInd)
      covMatrix is the design matrix [nInd][nEnv]
      weights is the weights (nInd*nEnv)
-     residuals[nInd] are the residuals
      int df is the number of degrees of freedom
      nInd is the number of individuals
      nEnv is the number of predictors (including the intercept)
    */
+  
    int nIndW=0;
    char nonZeroWeight[nInd4];
    memset(nonZeroWeight,0,nInd4);
@@ -29,6 +31,7 @@ void getFit(double* start, double* Y, double** covMatrix, const double* weights,
      memset(nonZeroWeight,1,nInd4);
    } else{
      for(int i=0;i<nInd4;i++){
+       // checks that weights are greater than 0, and keeps those individuals
        if(weights[i]>0){
 	 //fprintf(stdout,"%f ",weights[i]);
 	 nonZeroWeight[i]=1;
@@ -59,7 +62,6 @@ void getFit(double* start, double* Y, double** covMatrix, const double* weights,
      }
    }
     
-   // This is (X)^T*W*X when doing weighted least squares, where X is the design matrix and W is the weights
    double XtX[nEnv*nEnv];
    for(int i=0;i<nEnv*nEnv;i++)
      XtX[i]=0;
@@ -80,7 +82,7 @@ void getFit(double* start, double* Y, double** covMatrix, const double* weights,
      fprintf(stderr,"\n");
    } 
 #endif
-   
+   // doing inv((X)^T*W*X)
    double workspace[2*nEnv];   
    matinv(XtX, nEnv, nEnv, workspace);
 
@@ -92,19 +94,21 @@ void getFit(double* start, double* Y, double** covMatrix, const double* weights,
        fprintf(stderr,"%f ",XtX[i*nEnv+j]);
      fprintf(stderr,"\n");
    } 
-#endif 
+#endif
        
    double Xt_y[nEnv];
-   double invXtX_Xt_y[nEnv];
+   double invXtX_Xt_y[nEnv]; 
    for(int i=0;i<nEnv;i++)
      Xt_y[i]=0;
    for(int i=0;i<nEnv;i++)
      invXtX_Xt_y[i]=0;
 
+   // doing (X)^T*W*Y
    for(int x=0;x<nEnv;x++)
      for(int i=0;i<nIndW;i++)
        Xt_y[x]+=xw[i*nEnv+x]*yw[i];
 
+   // calculating the coefs: inv((X)^T*W*X)*((X)^T*W*Y)
    for(int x=0;x<nEnv;x++)
      for(int y=0;y<nEnv;y++)
        invXtX_Xt_y[x] += XtX[y*nEnv+x]*Xt_y[y];
@@ -112,9 +116,7 @@ void getFit(double* start, double* Y, double** covMatrix, const double* weights,
    for(int x=0;x<nEnv;x++){
      start[x]=invXtX_Xt_y[x];
    }
-     
-   //perhaps do it on log-scale...?
-   
+       
    double yTilde[nInd4];
    for(int i=0;i<nInd4;i++)
      yTilde[i] = 0;
@@ -125,6 +127,7 @@ void getFit(double* start, double* Y, double** covMatrix, const double* weights,
        
    double ts=0;
    for(int i=0;i<nInd4;i++){
+     // getting the residuals
      double tmp = Y[i]-yTilde[i];
      //    fprintf(stdout,"\nYY[%d]\t%f\n",i,tmp);
      if(weights!=NULL){       
@@ -132,7 +135,6 @@ void getFit(double* start, double* Y, double** covMatrix, const double* weights,
      } else{
        ts += tmp*tmp;
      }
-
 
    }
 
@@ -148,6 +150,191 @@ void getFit(double* start, double* Y, double** covMatrix, const double* weights,
         
  }
 
+
+void getFitBin(double* start, double* Y, double** covMatrix, const double* weights, int nInd4, int nEnv, int df){
+   //  fprintf(stderr,"%s: nInd4:%d nEnv:%d df:%d\n",__FUNCTION__,nInd4,nEnv,df);
+
+   /*
+     Fits logistic model using iterativt weighted least squares (IWLS)
+     linear regression. Fits a logistic model with weights
+     Y is the binary responce (nInd)
+     covMatrix is the design matrix [nInd][nEnv]
+     weights is the weights (nInd*nEnv)
+     int df is the number of degrees of freedom
+     nInd is the number of individuals
+     nEnv is the number of predictors (including the intercept)
+   */
+  
+   int nIndW=0;
+   // SHOULD I MAKE USE of nonZeroWeight in logistic regression
+   char nonZeroWeight[nInd4];
+   memset(nonZeroWeight,0,nInd4);
+   if(weights==NULL){
+     nIndW=nInd4;
+     
+     memset(nonZeroWeight,1,nInd4);
+   } else{
+     for(int i=0;i<nInd4;i++){
+       if(weights[i]>0){
+	 //fprintf(stdout,"%f ",weights[i]);
+	 // counts non zero weights!
+	 nonZeroWeight[i]=1;
+	 nIndW++;
+       }
+     }
+   }
+
+   double mustart[nIndW];
+   // if weights do not exists, have all weights be 1
+   if(weights==NULL){     
+     for(int i=0;i<nIndW;i++){
+       mustart[i] = (1*Y[i] + 0.5)/(1 + 1);
+     }
+   } else{     
+     for(int i=0;i<nIndW;i++){
+       mustart[i] = (weights[i]*Y[i] + 0.5)/(weights[i] + 1);
+     }
+   }
+   
+   double eta[nIndW];
+   for(int i=0;i<nIndW;i++){
+     //link
+     eta[i] = log(mustart[i]/(1-mustart[i]));
+   }
+   
+   double mu[nIndW];
+   for(int i=0;i<nIndW;i++){
+     //linkinv
+     mu[i] = 1 / (1 + exp(-eta[i]));
+   }
+   
+   double muetaval[nIndW];
+   double z[nIndW];
+   double w[nIndW];
+   double workspace[2*nEnv];   
+   double XtX[nEnv*nEnv] = {0};
+   double Xt_y[nEnv] = {0};
+   double invXtX_Xt_y[nEnv] = {0}; 
+   
+   // we run this 20 times...
+   // PROBABLY SHOULD PUT SOME BREAKING CRITERIA
+   for(int t=0;t<20;t++){
+     
+     for(int i=0;i<nIndW;i++){
+       // because mu is same as linkinv(eta)
+       muetaval[i] = mu[i]*(1-mu[i]); 
+     }
+               
+     for(int i=0;i<nIndW;i++){
+       // can be calculated together as do not depent on eachother
+       z[i] = eta[i]+(Y[i]-mu[i])/muetaval[i];
+
+       if(weights==NULL){
+	 w[i] = sqrt( (1*(muetaval[i]*muetaval[i])) / (mu[i]*(1-mu[i])) );
+       } else{
+	 w[i] = sqrt( (weights[i]*(muetaval[i]*muetaval[i])) / (mu[i]*(1-mu[i])) );
+       }
+
+     }
+      
+     // this is doing the matrix product of (X)^T*W*X
+     // takes all columns of second matrix and puts on first column of first matrix - stores at first 0 to nEnv-1 values of XtX
+     // takes all columns of second matrix and puts on second column of first matrix - stores at nEnv to 2*nEnv-1 values of XtX
+     // thereby the same as taking rows of transposed first matrix (cols of org) and putting it on all columns of second matrix
+     for(int x=0;x<nEnv;x++){
+       for(int y=0;y<nEnv;y++){
+	 XtX[x*nEnv+y]=0;
+	 for(int i=0;i<nIndW;i++){
+	   // t(xw) %*% xw
+	   XtX[x*nEnv+y]+=(covMatrix[i][x]*w[i])*(covMatrix[i][y]*w[i]);
+	 }
+       }
+     }
+
+     
+#if 0
+     //print before inversion
+     fprintf(stderr,"BEFORE:\n");
+     for(int i=0;i<nEnv;i++){
+       for(int j=0;j<nEnv;j++)
+	 fprintf(stderr,"%f ",XtX[i*nEnv+j]);
+       fprintf(stderr,"\n");
+     } 
+#endif
+          
+     matinv(XtX, nEnv, nEnv, workspace);
+     
+#if 0
+     //print after inversion
+     fprintf(stderr,"AFTER:\n");
+     for(int i=0;i<nEnv;i++){
+       for(int j=0;j<nEnv;j++)
+	 fprintf(stderr,"%f ",XtX[i*nEnv+j]);
+       fprintf(stderr,"\n");
+     } 
+#endif 
+    
+     // this is doing the matrix product of (X)^T*W*Y
+     // takes first column of first matrix and puts on first and only column of second matrix
+     // takes second column of first matrix and puts on first and only column of second matrix
+     for(int x=0;x<nEnv;x++){
+       Xt_y[x]=0;
+       for(int i=0;i<nIndW;i++){	 
+	 Xt_y[x] += (covMatrix[i][x]*w[i])*(z[i]*w[i]);
+       }       
+     }
+
+     // calculating coefficients so inv((X)^T*W*X)*((X)^T*W*Y)
+     // the coefficients are stored in start
+     for(int x=0;x<nEnv;x++){
+       for(int y=0;y<nEnv;y++){
+	 invXtX_Xt_y[x] += XtX[y*nEnv+x]*Xt_y[y];
+       }
+       start[x]=invXtX_Xt_y[x];
+     }
+          
+     // eta
+     for(int i=0;i<nIndW;i++){
+       // clear values of eta
+       eta[i]=0;
+       for(int x=0;x<nEnv;x++)
+	 eta[i] += covMatrix[i][x]*start[x];
+     }
+     // mu
+     for(int i=0;i<nIndW;i++){
+       //linkinv
+       mu[i] = 1 / (1 + exp(-eta[i]));
+     }
+
+     //not sure I have to calculate residuals...
+     
+     // clear those that have +=
+     memset(XtX, 0, sizeof(XtX));
+     memset(Xt_y, 0, sizeof(Xt_y));
+     memset(invXtX_Xt_y, 0, sizeof(invXtX_Xt_y));
+     
+   }
+   
+   // this is doing the matrix product of (X)^T*W*X    
+   for(int i=0;i<nIndW;i++)
+     for(int x=0;x<nEnv;x++)
+       eta[i] += covMatrix[i][x]*start[x];
+   
+   for(int i=0;i<nIndW;i++){
+     //linkinv
+     mu[i] = 1 / (1 + exp(-eta[i]));
+   }
+      
+   double yTilde[nInd4];
+   for(int i=0;i<nInd4;i++)
+     yTilde[i] = 0;
+     
+   for(int i=0;i<nIndW;i++){
+     mu[i] = 1 / (1 + exp(-eta[i]));
+     yTilde[i] = (Y[i] - mu[i]) / (mu[i]*(1-mu[i]));
+   }
+   
+}
 
 //pat[add/rec][x1/x2][X][g]
 char pat[2][5][4][3] = {
@@ -206,61 +393,79 @@ char pat[2][5][4][3] = {
     }}
 };
 
-double tnorm(double x,double mean,double sd){
+double dnorm(double x,double mean,double sd){
     
   double fac = 1.0/(sd*sqrt(2.0*M_PI));
   double val = exp(-(((x-mean)*(x-mean))/(2*sd*sd)));  
   return fac*val;
 }
 
-double logtnorm(double x,double mean,double sd){
+double logdnorm(double x, double mean, double sd){
     
   double fac = 1.0/(sd*sqrt(2.0*M_PI));
   double val = exp(-(((x-mean)*(x-mean))/(2*sd*sd)));  
   return log(fac*val);
 }
 
+// from /home/albrecht/github/angsd/fet.c
+// getting log of binomial
+// log\binom{n}{k}
+static double lbinom(int n, int k){
+  if (k == 0 || n == k) return 0;
+  return lgamma(n+1) - lgamma(k+1) - lgamma(n-k+1);
+}
 
-double logLike(double *start,double* pheno,Matrix<double> *design,double *p_sCg){
+
+// from /home/albrecht/github/angsd/misc/contamination2.cpp (called ldbinom in there)
+double logdbinom(int k, int n,double p){
+  return lbinom(n,k)+k*log(p)+(n-k)*log(1-p);
+}
+
+
+double dbinom(int k, int n,double p){
+  return exp(lbinom(n,k)+k*log(p)+(n-k)*log(1-p));
+}
+
+
+double logLike(double *start,double* pheno,Matrix<double> *design,double *p_sCg,int regression){
   double ret = 0;
 #if 0
   for(int i=0;i<p->start_len;i++)
     fprintf(stderr,"%f ",p->start[i]);
   fprintf(stderr,"\n");
 #endif
-
+  
   double tmp=0;
   for(int i=0;i<design->dx;i++){
     double m=0;
-    for(int j=0;j<design->dy;j++){
-
-      // to not include missing genotypes
-      if(j==0 && design->d[i][j]==3){
-	continue;
-      }      
+    for(int j=0;j<design->dy;j++){           
       m +=  design->d[i][j]*start[j];      
     }
-    m = tnorm(pheno[i],m,start[design->dy]);
 
-    // emil        
+    if(regression==0){
+      m = dnorm(pheno[i],m,start[design->dy]);
+    } else{      
+      m = dbinom(pheno[i],1,(exp(m)/(exp(m)+1)));
+    }
+    
     tmp += m*p_sCg[i];
     if((i % 4 )==3){
-      ret -= log(tmp);
+
+      // same as taking log of all values and then summing and then flipping sign (plus to minus)
+      ret -= log(tmp);    
       tmp = 0;
-    }
+    }    
+    
   }
-
-
-  
   return ret;
 }
 
 inline double logLikeP(pars *p){
-  return logLike(p->start,p->pheno,p->design,p->p_sCg);
+  return logLike(p->start,p->pheno,p->design,p->p_sCg,p->regression);
 }
 
 //double updateEM(pars *p){
-double updateEM(double *start,Matrix<double> *design,Matrix<double> *ysCgs,double *pheno,int nInd,double *p_sCg){
+double updateEM(double *start,Matrix<double> *design,Matrix<double> *ysCgs,double *pheno,int nInd,double *p_sCg, int regression){
 #if 0
   for(int i=0;i<=design->dy;i++)
     fprintf(stderr,"%f ",start[i]);
@@ -273,7 +478,7 @@ double updateEM(double *start,Matrix<double> *design,Matrix<double> *ysCgs,doubl
     for(int j=0;j<design->dy;j++)
       m += design->d[i][j]*start[j];
     // density function of normal distribution
-    m = logtnorm(pheno[i],m,start[design->dy]);   
+    m = logdnorm(pheno[i],m,start[design->dy]);   
     double tmp = m*p_sCg[i];
     //    fprintf(stderr,"(%lu,%d):%f\n",(size_t)floor(i/4),i %4,tmp);
     ysCgs->d[(size_t)floor(i/4)][i % 4] = tmp;
@@ -292,9 +497,7 @@ double updateEM(double *start,Matrix<double> *design,Matrix<double> *ysCgs,doubl
       tmp += ysCgs->d[i][j];
     }
     ycGs[i] = tmp;
-  }
-
-  
+  }  
 
   // divide each entry of a row with sum of that row
   int df = ysCgs->dx - design->dy;
@@ -326,13 +529,13 @@ double updateEM(double *start,Matrix<double> *design,Matrix<double> *ysCgs,doubl
   fprintf(stderr,"\n");
 #endif 
   
-  return logLike(start,pheno,design,p_sCg);
+  return logLike(start,pheno,design,p_sCg,regression);
 }
 
 
 
 //double updateEM(pars *p){
-double logupdateEM(double *start,Matrix<double> *design,Matrix<double> *ysCgs,double *pheno,int nInd,double *p_sCg){
+double logupdateEM(double *start,Matrix<double> *design,Matrix<double> *ysCgs,double *pheno,int nInd,double *p_sCg, int regression){
 #if 0
   for(int i=0;i<=design->dy;i++)
     fprintf(stderr,"%f ",start[i]);
@@ -342,17 +545,23 @@ double logupdateEM(double *start,Matrix<double> *design,Matrix<double> *ysCgs,do
   double ret;
   for(int i=0;i<design->dx;i++){
     double m = 0;
-    for(int j=0;j<design->dy;j++)
+    for(int j=0;j<design->dy;j++){
       m += design->d[i][j]*start[j];
-
-    // density function of normal distribution   
-    m = logtnorm(pheno[i],m,start[design->dy]);      
+    }
+    if(regression==0){
+      // density function of normal distribution   
+      m = logdnorm(pheno[i],m,start[design->dy]);      
+    } else{        
+      // density function of binomial distribution   
+      m = logdbinom(pheno[i],1,(exp(m)/(exp(m)+1)));      
+    }
+    
     double tmp = m + log(p_sCg[i]);
     //    fprintf(stderr,"(%lu,%d):%f\n",(size_t)floor(i/4),i %4,tmp);
     ysCgs->d[(size_t)floor(i/4)][i % 4] = tmp;
     
   }
-    
+
   // dx is number of indis, dy is 4
   ysCgs->dx = (size_t) design->dx/4;
   ysCgs->dy = 4;
@@ -385,11 +594,15 @@ double logupdateEM(double *start,Matrix<double> *design,Matrix<double> *ysCgs,do
   for(int i=0;i<ysCgs->dx;i++)
     for(int j=0;j<ysCgs->dy;j++){
       weigths[a++] = exp(ysCgs->d[i][j]);
-      // fprintf(stdout,"%f ",weigths[a-1]);
+      //fprintf(stdout,"%f ",weigths[a-1]);
     }
-     
-   //double resi[nInd];
-   getFit(start,pheno,design->d,weigths,nInd*4,design->dy,df);
+  
+  if(regression==0){
+    //double resi[nInd];
+    getFit(start,pheno,design->d,weigths,nInd*4,design->dy,df);
+  } else{
+    getFitBin(start,pheno,design->d,weigths,nInd*4,design->dy,df);
+  }
   
 #if 0
   for(int i=0;i<=design->dy;i++)
@@ -397,18 +610,22 @@ double logupdateEM(double *start,Matrix<double> *design,Matrix<double> *ysCgs,do
   fprintf(stderr,"\n");
 #endif 
   
-  return logLike(start,pheno,design,p_sCg);
+  return logLike(start,pheno,design,p_sCg,regression);
 }
- 
 
-inline double updateEMP(pars *p){
-  
-  return logupdateEM(p->start,p->design,p->ysCgs,p->pheno,p->len,p->p_sCg);
+
+inline double updateEMP(pars *p){  
+  return logupdateEM(p->start,p->design,p->ysCgs,p->pheno,p->len,p->p_sCg,p->regression);
   //return updateEM(p->start,p->design,p->ysCgs,p->pheno,p->len,p->p_sCg);
 }
 
 
 #define FOR(i,n) for(i=0; i<n; i++)
+
+// SEEMS like there might be a problem with underflow when values of matrix are very high
+// APPARENTLY doing matrix inversion for solving linear equations is not a good idea numerically...
+// when using age as covariate, it will work every time if starting value is low (0.4 or below approx.),
+// and not if starting value is above 0.4 approx..., what to do about this??
 
 // XtX is array (N*N long so works like matrix) with allele counts wieghted by prob of state
 // n and m are number of predictors, space is array where results are put into
@@ -541,8 +758,8 @@ void mkDesign(pars *p){
     // emil - now design has 5 columns (alternative allele also) + number of covariates
     p->design->dy=p->covs->dy+5;
   }
-
-  p->design->dx=p->len*4;
+   
+   p->design->dx=p->len*4;
 
 }
 
@@ -554,21 +771,22 @@ void controlEM(pars *p){
   double llh1;
   for(int i=0;i<p->maxIter;i++){
     llh1 = updateEMP(p);
-    //fprintf(stderr,"\t\t%s[%d] like: %f diff: %f\n",__FUNCTION__,i,llh1,llh1-llh0);
+    //fprintf(stderr,"\t\t%s[%d] like: %f diff: %f\n",__FUNCTION__,i,llh1,llh1-llh0);    
     
     if(1){//remove for tole check and direction check
-       if(fabs(llh1-llh0)<p->tol){
+       if(fabs(llh1-llh0)<p->tol){	 
 	 //	 fprintf(stderr,"Converged \n");
 	 break;
        }if(llh0<llh1){
-	 //	 fprintf(stderr,"Fit caused increase in likelihood, will roll back to previous step\n");
-	 memcpy(p->start,pars0,sizeof(double)*(p->design->dy+1));
+	 //	 fprintf(stderr,"Fit caused increase in likelihood, will roll back to previous step\n");		 
+	 memcpy(p->start,pars0,sizeof(double)*(p->design->dy+1));	
 	 break;
        }
 
     }
-    llh0=llh1;
-    memcpy(pars0,p->start,sizeof(double)*(p->design->dy+1));
+    llh0=llh1;   
+    memcpy(pars0,p->start,sizeof(double)*(p->design->dy+1));   
+    
     for(int j=0;0&&j<p->design->dy+1;j++)
       fprintf(stderr,"%f ",pars0[j]);
   }
@@ -594,8 +812,7 @@ void rmPos(double *d,int at,int l){
     fprintf(stderr,"i[%d]:%f\n",i,d[i]);  
   assert(at>=0 &&at<l);
   int cnt=0;
-  for(int j=0;j<l;j++){
-    
+  for(int j=0;j<l;j++){    
     if(j!=at){
       d[cnt++] = d[j];
     }
@@ -638,14 +855,194 @@ void asamEM(pars *p){
     maf0=0;
   }
   if(p->mafs[1]>0.995||p->mafs[1]<0.005){
-    maf1=0;
+    maf1=0;    
   }
-
+ 
   // p->model is either 0 (add model) or 1 (rec model)
-  if(p->model>0){
+  if(p->model==0){
 
+    //////////// do M0 - model with also A1 ///////////////
+    
+    fprintf(stderr,"M0\n");
+    
+    mkDesign(p);
+    p_sCg(p);
+    if(maf0 && maf1){
+      controlEM(p);
+      printRes(p,0); 
+    } else{
+      printNan(p,0);
+    }
+
+
+    
+    //////////// do M1 ///////////////
+    
+    fprintf(stderr,"M1\n");    
+    
+    mkDesign(p);
+    p_sCg(p);
+    
+    memcpy(p->start,p->start0,sizeof(double)*(p->design->dy+1));
+     
+    // remove third column from design - column counting A1, remember start has sd(y) at the end (one longer)
+    rmPos(p->start,2,p->covs->dy+3+1);
+    rmCol(p->design,2);
+    
+    if(maf0 && maf1){
+      controlEM(p);
+      printRes(p,2); 
+    } else{
+      printNan(p,2);
+    }
+
+    
+    //////////// do M2 ///////////////
+    //remove column2 and second value from start M2
+    
+    fprintf(stderr,"M2\n");
+    
+    mkDesign(p);
+    p_sCg(p);
+    memcpy(p->start,p->start0,sizeof(double)*(p->design->dy+1));
+    
+    // remove B2 second in design, remember start has sd(y) at the end (one longer)
+    rmPos(p->start,0,p->covs->dy+3+1);    
+    rmCol(p->design,0);
+    // remove A1 third in design (NB!! now second cause first was removed), remember start has sd(y) at the end (one longer)
+    rmPos(p->start,1,p->covs->dy+2+1);
+    rmCol(p->design,1);
+        
+    if(maf0){
+      controlEM(p);
+      printRes(p,1); 
+    }  else{
+      printNan(p,1);
+    }
+         
+    //////////// do M3 ///////////////
+    //remove column1 and first value from start M3
+    
+    fprintf(stderr,"M3\n");
+    
+    mkDesign(p);
+    p_sCg(p);
+    memcpy(p->start,p->start0,sizeof(double)*(p->design->dy+1));
+    
+    // remove B2 second in design, remember start has sd(y) at the end (one longer)
+    rmPos(p->start,1,p->covs->dy+3+1);
+    rmCol(p->design,1);
+    // remove A1 third in design (NB!! now second cause second was removed), remember start has sd(y) at the end (one longer)
+    rmPos(p->start,1,p->covs->dy+2+1);
+    rmCol(p->design,1);
+    
+    if(maf1){
+      controlEM(p);
+      printRes(p,1); 
+    } else{
+      printNan(p,1);
+    }
+     
+    //////////// do M4 ///////////////
+    //cbind gs and covs into design M4:
+    
+    fprintf(stderr,"M4\n");
+    
+    for(int i=0;i<p->covs->dx;i++){
+      p->design->d[i][0] = p->gs[i];
+      for(int j=0;j<p->covs->dy;j++)
+	// not sure if this is necessary
+	p->design->d[i][j+1] = p->covs->d[i][j];
+    }
+    p->design->dx=p->covs->dx;
+    p->design->dy=p->covs->dy+1;
+    
+    p_sCg(p);
+    
+    // emil - start gets values in getFit - these are the coefs
+    for(int i=0;i<p->design->dy+2;i++)
+      p->start[i]=NAN;
+
+
+    if(p->regression==0){
+      //double resi[p->design->dx];
+      getFit(p->start,p->ys,p->design->d,NULL,p->design->dx,p->design->dy,-1);
+    } else{
+      getFitBin(p->start,p->ys,p->design->d,NULL,p->design->dx,p->design->dy,-1);
+    }
+      
+    // it somehow needs full design matrix for likelihood calculations
+    // WHAT IS THIS???????
+    mkDesign(p);
+    
+    // has to put genotype as first column - design has 4 rows for each indi - REMEMBER THAT!!
+    for(int i=0;i<p->covs->dx;i++){
+      if( p->gs[i]>2){
+	fprintf(stderr,"geno bigger than 3\n");
+      }
+      // has to have the same geno value for each of the 4 rows
+      for(int j=0;j<4;j++){
+	p->design->d[i*4+j][0] = p->gs[i];
+      }
+    }            
+    
+    // skips B2 and A1
+    // emil - has to skip both B2 and A1 (column 2 and 3 design matrix)
+    for(int i=p->design->dy;i>0;i--){
+      // should let first column be, and move later than 3rd later, 2 columns up (4th->2nd, 5th->3rd,...)
+      if(i>2){
+	p->start[i] = p->start[i-2];
+      }
+    }
+
+    
+    p->start[2]=p->start[1]=0;
+  
+    // B2 and A1 has no effect, as they are not in model, B1 is genotype
+    
+    //p->start[0]=p->start[2];
+
+    //print to kbuf
+    printRes(p,1); 
+    
+    //////////// do M5 ///////////////  
+    //cpy covs to design M5
+    
+    fprintf(stderr,"M5\n");
+    
+    for(int i=0;i<p->covs->dx;i++){
+      for(int j=0;j<p->covs->dy;j++)
+	p->design->d[i][j] = p->covs->d[i][j];
+    }
+    p->design->dx=p->covs->dx;
+    p->design->dy=p->covs->dy;
+    
+    p_sCg(p);
+    for(int i=0;i<p->design->dy+1;i++)
+      p->start[i]=NAN;
+        
+    // double resi[p->design->dx];
+    if(p->regression==0){    
+      getFit(p->start,p->ys,p->design->d,NULL,p->design->dx,p->design->dy,-1);
+    } else{
+      getFitBin(p->start,p->ys,p->design->d,NULL,p->design->dx,p->design->dy,-1);
+    }
+    mkDesign(p);
+        
+    // skips A1,A2 for me has to skip both A1,A2 and B1 (column 1,2 and 3 design matrix)
+    for(int i=p->design->dy;i>1;i--){
+      p->start[i] = p->start[i-3];
+    }
+    p->start[2]=p->start[1]=p->start[0]=0;
+           
+    printRes(p,0);
+    
+  } else{
+    
+    
     //////////// do R0 - model with also delta1 and delta2 (rec for alternative allele) ///////////////
     // do we want to write any of the effect sizes?
+    
     fprintf(stderr,"R0\n");
     
     mkDesign(p);
@@ -664,7 +1061,8 @@ void asamEM(pars *p){
         
     mkDesign(p);
     p_sCg(p);
-    
+
+    // copy original start values from start0 - because start values have coefs from R0
     memcpy(p->start,p->start0,sizeof(double)*(p->design->dy+1));
        
     // remove fourth column from design - column counting delta1
@@ -691,7 +1089,7 @@ void asamEM(pars *p){
     p_sCg(p);
     memcpy(p->start,p->start0,sizeof(double)*(p->design->dy+1));
 
-    // second column: Rm + R2
+    // generating second column: Rm + R2
     for(int i=0;i<p->design->dx;i++){
       p->design->d[i][1] = p->design->d[i][1] + p->design->d[i][2];
     }
@@ -724,7 +1122,7 @@ void asamEM(pars *p){
     p_sCg(p);
     memcpy(p->start,p->start0,sizeof(double)*(p->design->dy+1));
 
-    // first column: Rm + R1
+    // generating first column: Rm + R1
     for(int i=0;i<p->design->dx;i++){      
       p->design->d[i][0] = p->design->d[i][0] + p->design->d[i][2];
     }
@@ -773,12 +1171,12 @@ void asamEM(pars *p){
     rmCol(p->design,1);   
     
     if(maf1){
-       controlEM(p);
+      controlEM(p);
       printRes(p,1); 
-     } else{
-       printNan(p,1);
-     }
-             
+    } else{
+      printNan(p,1);
+    }
+    
     //////////// do R5 ///////////////  
     //cpy covs to design M5
 
@@ -813,7 +1211,8 @@ void asamEM(pars *p){
     //////////// do R6 ///////////////  
 
     fprintf(stderr,"R6\n");
-    
+
+    // generating a first column of a design matrix has if recessive site (regardless ancestry)
     for(int i=0;i<p->covs->dx;i++){
       if(p->gs[i]==2){
 	p->design->d[i][0] = 1;
@@ -821,23 +1220,23 @@ void asamEM(pars *p){
 	p->design->d[i][0] = 0;
       }
       for(int j=0;j<p->covs->dy;j++)
-	// not sure if this is necessary
+	// putting covariates in design matrix from second column and on...
 	p->design->d[i][j+1] = p->covs->d[i][j];
     }
+    // changing dimension of design matrix accordingly
     p->design->dx=p->covs->dx;
     p->design->dy=p->covs->dy+1;
 
     p_sCg(p);
     
-    // emil - start gets values in getFit - these are the coefs
+    // emil - start gets values in getFit - therefore ok with NAN values
     for(int i=0;i<p->design->dy+2;i++)
       p->start[i]=NAN;
 
-    //double resi[p->design->dx];
+    // fitting a model with current R6 design matrix, getting the coefs (stored in start) - (Ordinary least squares)
     getFit(p->start,p->ys,p->design->d,NULL,p->design->dx,p->design->dy,-1);
          
-    // it somehow needs full design matrix for likelihood calculations
-    // WHAT IS THIS???????
+    // generating full design matrix for likelihood calculations
     mkDesign(p);
     
     // has to put genotype as first column - design has 4 rows for each indi - REMEMBER THAT!!
@@ -855,20 +1254,15 @@ void asamEM(pars *p){
       }
     }            
     
-    // emil - has to skip both R2, Rm, delta1 and delta2 (column 2, 3, 4 and 5 design matrix)
+    // emil - has to skip both R2, Rm, delta1 and delta2 (column 2, 3, 4 and 5 design matrix) - obtained by giving coef of 0 (start values)
     for(int i=p->design->dy;i>0;i--){
-      // should let first column be, and move later than 3rd later, 2 columns up (4th->2nd, 5th->3rd,...)
+      // should let first column be, and move columns after 4th later, 4 columns up (6th->2nd, 7th->3rd,...)
       if(i>2){
 	p->start[i] = p->start[i-4];
       }
     }
-    
-    p->start[4]=p->start[3]=p->start[2]=p->start[1]=0;
-  
-   
-    // B2 and A1 has no effect, as they are not in model, B1 is genotype
-    
-    //p->start[0]=p->start[2];
+    // coefs of R2, Rm, delta1 and delta2 being set to 0
+    p->start[4]=p->start[3]=p->start[2]=p->start[1]=0;           
     
     //print to kbuf
     printRes(p,1);
@@ -914,172 +1308,6 @@ void asamEM(pars *p){
     //print to kbuf
     printRes(p,0); 
     
-  } else{
-    
-    //////////// do M0 - model with also A1 ///////////////
-    
-    fprintf(stderr,"M0\n");
-    
-    mkDesign(p);
-    p_sCg(p);
-    if(maf0 && maf1){
-      controlEM(p);
-      printRes(p,0); 
-    } else{
-      printNan(p,0);
-    }
-      
-    
-    //////////// do M1 ///////////////
-    
-    fprintf(stderr,"M1\n");    
-    
-    mkDesign(p);
-    p_sCg(p);
-    
-    memcpy(p->start,p->start0,sizeof(double)*(p->design->dy+1));
-     
-    // remove third column from design - column counting A1, remember start has sd(y) at the end (one longer)
-    rmPos(p->start,2,p->covs->dy+3+1);
-    rmCol(p->design,2);
-    
-    if(maf0 && maf1){
-      controlEM(p);
-      printRes(p,2); 
-    } else{
-      printNan(p,2);
-    }
-        
-    //////////// do M2 ///////////////
-    //remove column2 and second value from start M2
-    
-    fprintf(stderr,"M2\n");
-    
-    mkDesign(p);
-    p_sCg(p);
-    memcpy(p->start,p->start0,sizeof(double)*(p->design->dy+1));
-    
-    // remove B2 second in design, remember start has sd(y) at the end (one longer)
-    rmPos(p->start,0,p->covs->dy+3+1);    
-    rmCol(p->design,0);
-    // remove A1 third in design (NB!! now second cause first was removed), remember start has sd(y) at the end (one longer)
-    rmPos(p->start,1,p->covs->dy+2+1);
-    rmCol(p->design,1);
-        
-    if(maf0){
-      controlEM(p);
-      printRes(p,1); 
-    }  else{
-      printNan(p,1);
-    }
-    
-    //////////// do M3 ///////////////
-    //remove column1 and first value from start M3
-    
-    fprintf(stderr,"M3\n");
-    
-    mkDesign(p);
-    p_sCg(p);
-    memcpy(p->start,p->start0,sizeof(double)*(p->design->dy+1));
-    
-    // remove B2 second in design, remember start has sd(y) at the end (one longer)
-    rmPos(p->start,1,p->covs->dy+3+1);
-    rmCol(p->design,1);
-    // remove A1 third in design (NB!! now second cause second was removed), remember start has sd(y) at the end (one longer)
-    rmPos(p->start,1,p->covs->dy+2+1);
-    rmCol(p->design,1);
-    
-    if(maf1){
-      controlEM(p);
-      printRes(p,1); 
-    } else{
-      printNan(p,1);
-    }
-    
-    //////////// do M4 ///////////////
-    //cbind gs and covs into design M4:
-    
-    fprintf(stderr,"M4\n");
-    
-    for(int i=0;i<p->covs->dx;i++){
-      p->design->d[i][0] = p->gs[i];
-      for(int j=0;j<p->covs->dy;j++)
-	// not sure if this is necessary
-	p->design->d[i][j+1] = p->covs->d[i][j];
-    }
-    p->design->dx=p->covs->dx;
-    p->design->dy=p->covs->dy+1;
-    
-    p_sCg(p);
-    
-    // emil - start gets values in getFit - these are the coefs
-    for(int i=0;i<p->design->dy+2;i++)
-      p->start[i]=NAN;
-    
-    //double resi[p->design->dx];
-    getFit(p->start,p->ys,p->design->d,NULL,p->design->dx,p->design->dy,-1);
-        
-    // it somehow needs full design matrix for likelihood calculations
-    // WHAT IS THIS???????
-    mkDesign(p);
-    
-    // has to put genotype as first column - design has 4 rows for each indi - REMEMBER THAT!!
-    for(int i=0;i<p->covs->dx;i++){
-      if( p->gs[i]>2){
-	fprintf(stderr,"geno bigger than 3\n");
-      }
-      // has to have the same geno value for each of the 4 rows
-      for(int j=0;j<4;j++){
-	p->design->d[i*4+j][0] = p->gs[i];
-      }
-    }            
-    
-    // skips B2 and A1
-    // emil - has to skip both B2 and A1 (column 2 and 3 design matrix)
-    for(int i=p->design->dy;i>0;i--){
-      // should let first column be, and move later than 3rd later, 2 columns up (4th->2nd, 5th->3rd,...)
-      if(i>2){
-	p->start[i] = p->start[i-2];
-      }
-    }
-    p->start[2]=p->start[1]=0;
-  
-    // B2 and A1 has no effect, as they are not in model, B1 is genotype
-    
-    //p->start[0]=p->start[2];
-    
-    //print to kbuf
-    printRes(p,1); 
-    
-    //////////// do M5 ///////////////  
-    //cpy covs to design M5
-    
-    fprintf(stderr,"M5\n");
-    
-    for(int i=0;i<p->covs->dx;i++){
-      for(int j=0;j<p->covs->dy;j++)
-	p->design->d[i][j] = p->covs->d[i][j];
-    }
-    p->design->dx=p->covs->dx;
-    p->design->dy=p->covs->dy;
-    
-    p_sCg(p);
-    for(int i=0;i<p->design->dy+1;i++)
-      p->start[i]=NAN;
-    
-    
-    // double resi[p->design->dx];
-    getFit(p->start,p->ys,p->design->d,NULL,p->design->dx,p->design->dy,-1);
-    mkDesign(p);
-    
-    
-    // skips A1,A2 for me has to skip both A1,A2 and B1 (column 1,2 and 3 design matrix)
-    for(int i=p->design->dy;i>1;i--){
-      p->start[i] = p->start[i-3];
-    }
-    p->start[2]=p->start[1]=p->start[0]=0;
-
-    printRes(p,0); 
     
   }  
   //  fprintf(stdout,"%s:%s\n",p->bufstr.s,p->tmpstr.s);  
