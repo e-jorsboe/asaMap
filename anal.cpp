@@ -64,45 +64,14 @@ void rstart(double *ary,size_t l, const std::vector<double> &phe){
 }
 
 // emil new random number generator, other one seemed to always generate negative values
-void rstart2(double *ary,size_t l, const std::vector<double> &phe, double fMin, double fMax, int balanceStart){
+void rstart2(double *ary,size_t l, const std::vector<double> &phe, double fMin, double fMax){
   for(int i=0;i<l;i++){
     double f = (double)rand() / RAND_MAX;
     ary[i] = fMin + f * (fMax - fMin);
    //  fprintf(stderr,"ary[%d]:%f\n",i,ary[i]);
   }
 
-  
 
-  // try to have same number of neg and pos values
-  // THIS IS NOT THE PROBLEM, problem is high covariate values
-  // getting too high starting values
-  if(balanceStart==1){
-    int pos = 0; int neg = 0;
-    for(int i=0;i<l;i++){
-      // count pos values
-      if(ary[i]>0){
-	pos++;
-      }
-      // count neg values
-      if(ary[i]<0){
-	neg++;	
-      }
-      // if 2 more neg or pos values - convert
-      if(abs(pos-neg)>=2){
-	// flip current value
-	ary[i]=ary[i]*-1;
-	// if it was positive, one less pos one more neg
-	if(pos>neg){
-	  neg++; pos--;
-	  // if it was negative, one more pos one less neg
-	} else if(neg>pos){
-	  pos++; neg--;
-	}
-	
-      }
-      
-    }
-  }
   
   // emil - for sd estimate use sd of y
   ary[l]=sd2(phe);
@@ -110,7 +79,7 @@ void rstart2(double *ary,size_t l, const std::vector<double> &phe, double fMin, 
 }
 
 
-pars *init_pars(size_t l,size_t ncov,int model,int maxInter,double tole,std::vector<double> &start, const std::vector<double> &phe, int balanceStart, int regression){
+pars *init_pars(size_t l,size_t ncov,int model,int maxInter,double tole,std::vector<double> &start, const std::vector<double> &phe, int regression, FILE* logFile){
   pars *p=new pars;
   p->len=l;
   // also intercept (which is not specified)
@@ -171,36 +140,52 @@ pars *init_pars(size_t l,size_t ncov,int model,int maxInter,double tole,std::vec
     // emil - will put in random numbers as starting guess - put new random function
     if(model==0){
       //rstart(p->start,ncov+3,phe);//<-will put sd at p->start[p->covs+dy+1]
-      rstart2(p->start,ncov+3,phe,-1,1,balanceStart);//<-will put sd at p->start[p->covs+dy+1]
+      rstart2(p->start,ncov+3,phe,-1,1);//<-will put sd at p->start[p->covs+dy+1]
 
       //if logisitc regression set last start value to 0
       if(p->regression==1){
 	p->start[ncov+3]=0;
       }
-      
-      fprintf(stderr,"Starting values are:\t");
-      for(int i=0;i<ncov+4;i++){
-	fprintf(stderr, "%f ",p->start[i]);
-      }
-      fprintf(stderr,"\n");
+           
     } else{
       //rstart(p->start,ncov+5,phe);//<-will put sd at p->start[p->covs+dy+1]
-      rstart2(p->start,ncov+5,phe,-1,1,balanceStart);//<-will put sd at p->start[p->covs+dy+1]
+      rstart2(p->start,ncov+5,phe,-1,1);//<-will put sd at p->start[p->covs+dy+1]
 
       //if logisitc regression set last start value to 0
       if(p->regression==1){
 	p->start[ncov+5]=0;
       }
 
-      fprintf(stderr,"Starting values are:\t");
-      for(int i=0;i<ncov+6;i++){
-	fprintf(stderr," %f ",p->start[i]);
-      }
-      fprintf(stderr,"\n");
-
     }
   }
 
+  if(p->model==0){
+    fprintf(stderr,"Starting values are:\t");
+    fprintf(logFile,"Starting values are:\t");
+    // starting values equal to covs + 4 (3 for add columns + sd(y) column)
+    for(int i=0;i<p->covs->dy+4;i++){
+      fprintf(stderr, "%f ",p->start[i]);
+      fprintf(logFile, "%f ",p->start[i]);
+    }
+    fprintf(stderr,"\n");
+    fprintf(logFile,"\n");  
+    memcpy(p->start,p->start0,sizeof(double)*(p->covs->dy+4));
+    
+  } else{
+    // if rec model - copy all starting values ncov + 6
+    fprintf(stderr,"Starting values are:\t");
+    fprintf(logFile,"Starting values are:\t");
+    // starting values equal to covs + 6 (5 for rec columns + sd(y) column)
+    for(int i=0;i<p->covs->dy+6;i++){
+      fprintf(stderr, "%f ",p->start[i]);
+      fprintf(logFile, "%f ",p->start[i]);
+    }
+    fprintf(stderr,"\n");
+    fprintf(logFile,"\n");  
+    memcpy(p->start,p->start0,sizeof(double)*(p->covs->dy+6));
+    
+  }
+  
   
   //copy it to the start0 which will be copied to start for each new site
   // emil has to be + 4, because also needs to copy sd(y) - last value of start
@@ -214,7 +199,7 @@ pars *init_pars(size_t l,size_t ncov,int model,int maxInter,double tole,std::vec
 }
 
 
-void set_pars(pars*p,char *g,const std::vector<double> &phe,const std::vector<double> &ad , double *freq,std::vector<double> start,Matrix<double> &cov,char *site){
+void set_pars(pars*p, char *g,const std::vector<double> &phe, const std::vector<double> &ad, double *freq, std::vector<double> start, Matrix<double> &cov, char *site){
 
   p->len=0;
   // check if all values of first column in cov file is 1
@@ -238,11 +223,40 @@ void set_pars(pars*p,char *g,const std::vector<double> &phe,const std::vector<do
 	p->len++;
     }
   }
+
+  if(interceptChecker==p->len){
+    fprintf(stderr,"Column of 1s for intercept should not be included in covariate,\n");
+    fprintf(stderr,"as this will be added automatically.\n");    
+    exit(1);
+  }
   
   p->covs->dx=p->len;
   // add extra covariate of intercept
   p->covs->dy=cov.dy+1;
   p->mafs = freq;
+
+  //try and protect from getting a too large (X^T*W*X) matrix, that is to be inverted
+  //by dividing the start value for the covariate with too high mean with 1/mean(covariate)
+  double sum = 0;
+  double max = 0;
+  for(int j=0;j<p->covs->dy;j++){
+    sum = 0; max = 0;
+    for(int i=0;i<p->len;i++){
+      sum += p->covs->d[i][j];
+      if(fabs(p->covs->d[i][j])>max){
+	max = fabs(p->covs->d[i][j]);
+      }
+    }
+    double mean = sum / p->len;
+    // 4 is pretty arbitrary however geno columns are at most 2
+    if(fabs(mean) > 4){
+      for(int i=0;i<p->len;i++){
+	// scales downs covariate to avoid numerical over/underflow
+	// will bring it to interval between -2 and 2
+	p->covs->d[i][j] = p->covs->d[i][j]/(max*0.5);
+      }
+    }
+  }               
   
   for(int i=0;i<p->len;i++){
     for(int j=0;j<4;j++){
@@ -253,18 +267,18 @@ void set_pars(pars*p,char *g,const std::vector<double> &phe,const std::vector<do
   }
 
   // if add model - copy all starting values ncov + 4
-  if(p->model==0){
-    memcpy(p->start,p->start0,sizeof(double)*(p->covs->dy+4));
-    // if rec model - copy all starting values ncov + 6
+  if(p->model==0){     
+    memcpy(p->start,p->start0,sizeof(double)*(p->covs->dy+4));        
   } else{
-    memcpy(p->start,p->start0,sizeof(double)*(p->covs->dy+6));
+    // if rec model - copy all starting values ncov + 6
+    memcpy(p->start,p->start0,sizeof(double)*(p->covs->dy+6));    
   }
 
   ksprintf(&p->bufstr,"%s%d\t%f\t%f\t",site,p->len,p->mafs[0],p->mafs[1]);
 }
 
 
-void wrap(const plink *plnk,const std::vector<double> &phe,const std::vector<double> &ad,Matrix<double> &freq,int model,std::vector<double> start,Matrix<double> &cov,int maxIter,double tol,std::vector<char*> &loci,int nThreads,FILE *outFile, int balanceStart, int regression){
+void wrap(const plink *plnk,const std::vector<double> &phe,const std::vector<double> &ad,Matrix<double> &freq,int model,std::vector<double> start,Matrix<double> &cov,int maxIter,double tol,std::vector<char*> &loci,int nThreads,FILE* outFile, FILE* logFile, int regression){
   //fprintf(stderr,"\t-> plinkdim: x->%lu y->%lu\n",plnk->x,plnk->y);
   //return ;
   char **d = new char*[plnk->y];//transposed of plink->d. Not sure what is best, if we filterout nonmissing anyway.
@@ -274,8 +288,8 @@ void wrap(const plink *plnk,const std::vector<double> &phe,const std::vector<dou
       d[i][j]=plnk->d[j][i];
   }
   //we prep for threading. By using encapsulating all data need for a site in struct called pars
-  pars *p=init_pars(plnk->x,cov.dy,model,maxIter,tol,start,phe,balanceStart,regression);
-
+  pars *p=init_pars(plnk->x,cov.dy,model,maxIter,tol,start,phe,regression,logFile);
+  
   for(int y=0;y<plnk->y;y++){//loop over sites
     
     fprintf(stderr,"Parsing site:%d\r",y);
@@ -295,9 +309,11 @@ void wrap(const plink *plnk,const std::vector<double> &phe,const std::vector<dou
     }
     //check that we observe atleast 10 obs of 2 different genotypes
     int n=0;
-    for(int i=0;i<4;i++)
+    // changed i to 3, as we do not want to consider missing geno a different genotype
+    for(int i=0;i<3;i++)
       if(cats2[i]>1)
 	n++;
+    // checks that there are at least 2 different genos (1 might be missing)
     if(n<2){
       fprintf(stderr,"skipping site[%d] due to categories filter\n",y);
       continue;

@@ -27,5 +27,10 @@ OBJ = $(CSRC:.c=.o) $(CXXSRC:.cpp=.o)
 asaMap: $(OBJ)
 	$(CXX) $(FLAGS)  -o asaMap *.o -lz -lpthread
 
+## with valgrind
+##asaMap: $(OBJ)
+##	$(CXX) $(FLAGS)  -o asaMap *.o -lz -lpthread -ggdb -static -g
+
+
 clean:
 	rm  -f *.o *.d asaMap *~

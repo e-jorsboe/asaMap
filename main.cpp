@@ -62,7 +62,7 @@ void print_info(FILE *fp){
   fprintf(fp, "   -t <FLOAT>          tolerance for breaking EM\n");
   fprintf(fp, "   -r <FLOAT>          seed for rand\n");
   fprintf(fp, "   -P <INT>            number of threads\n");
-  fprintf(fp, "   -B <INT>            balacing start guesses, same number of pos. and neg. (0=no, 1=yes)\n");
+
   fprintf(fp, "\n");
 }
 
@@ -84,18 +84,17 @@ int main(int argc,char **argv){
   char *startname = NULL;
   int model = 0;
   int regression = 0;
-  int mIter = 10;
-  double tol = 1e-8;
-  //emil suggestion caused had not realised
-  //number of mIter so different from R-code
-  //double tol = 1e-12;
+  //int mIter = 10;
+  //new value as in R-code
+  int mIter = 40;
+  //double tol = 1e-8;
+  //new value as in R-code
+  double tol = 1e-4;
   int n;
   //int seed = 100;
   //emil - I will give random seed:
   int seed = time(NULL);
   int nThreads = 1;
-  int balanceStart = 0;
-
 
   argv++;
   while(*argv){
@@ -127,9 +126,6 @@ int main(int argc,char **argv){
     else if(strcmp(*argv,"-r")==0) seed=atoi(*++argv); 
     // number of threads
     else if(strcmp(*argv,"-P")==0) nThreads=atoi(*++argv);
-    // balance starting values, meaning having almost same neg. and pos.
-    else if(strcmp(*argv,"-B")==0) balanceStart=atoi(*++argv); 
-
     else{
       fprintf(stderr,"Unknown arg:%s\n",*argv);
       FILE *fp=stderr;
@@ -182,13 +178,12 @@ int main(int argc,char **argv){
     fprintf(fp, "   -f \'%s\'\t\tallele frequencies\n",freqname);
     fprintf(fp, "\n optional arguments:\n");
     fprintf(fp, "   -m \'%d\'\t\tmodel 0=add 1=rec\n",model);
-    fprintf(fp, "   -m \'%d\'\t\tregression 0=linear 1=logistic\n",regression);
+    fprintf(fp, "   -l \'%d\'\t\tregression 0=linear 1=logistic\n",regression);
     fprintf(fp, "   -b \'%s\'\t\tfile containing the start\n",startname);
     fprintf(fp, "   -i \'%d\'\t\tmax number of iterations\n",mIter);
     fprintf(fp, "   -r \'%d\'\t\trandom seed\n",seed);
     fprintf(fp, "   -t \'%e\'\tfloat for breaking EM update\n",tol);
     fprintf(fp, "   -P \'%d\'\t\tnumber of threads\n",nThreads);
-    fprintf(fp, "   -B \'%d\'\t\tbalacing start guesses, so same number of pos. and neg. (0=no, 1=yes)\n",balanceStart);
     fprintf(fp, "\n");
     fprintf(stderr,"All files must be specified: -p -c -y -a -f -o\n");
     //    print_info(stderr);
@@ -196,23 +191,41 @@ int main(int argc,char **argv){
   }  
 #endif
   
+
+  FILE *outFile = fopen(outname, "w");
+
+  // creates new char array for new name of logfile
+  char *logname = new char[strlen(outname)+strlen(".log")+1];
+
+  // copies outname to logname
+  strcpy(logname,outname);
+  // append .log at logname char array
+  strncat(logname,".log",strlen(".log"));
+
+  FILE *logFile = fopen(logname, "w");
+  delete [] logname;
+
   //srand48(seed);
   std::srand(seed);
   fprintf(stderr,"Seed is: %i\n",seed);
   
-  FILE *outFile = fopen(outname, "w");
-  plink *p = readplink(pname);  
+  plink *p = readplink(pname);
+  
   std::vector<char *> loci = readBim(pname);
+
+  fprintf(stderr,"Seed is: %s\n",pname);
+  fprintf(stderr,"Seed is: %s\n",covname);  
   Matrix<double> cov = getMatrix(covname);
+
+  fprintf(stderr,"Seed is: %s\n",covname);
   if(0){
     print(&cov,stdout);
     return 0;
   }
   std::vector<double> pheno = getArray(phename);
-  std::vector<double> adprop;
+  std::vector<double> adprop(pheno.size());
   if(qname!=NULL){
     Matrix<double> Q = getMatrix(qname);
-    adprop.reserve(Q.dx);
     // I just read the first column of the .Q file into the adprop vector
     for(int i=0;i<Q.dx;i++){
       adprop[i]=Q.d[i][0];      
@@ -227,10 +240,37 @@ int main(int argc,char **argv){
 
   Matrix<double> f = getMatrix(freqname);
   std::vector<double> s = getArray(startname);
+  
+  // check files match in dimensions!!!!!!!
+  assert(cov.mx==pheno.size());
+  assert(adprop.size()==pheno.size());
+  assert(p->x==pheno.size());
+  // .P file has to have all loci of plink data
+  assert(f.mx==loci.size());
+  // only implemneted for 2 pops
+  assert(f.my==2);
+  // additive or recessive model
   assert(model==0 || model==1);
+  // linear or logisitc regression
   assert(regression==0 || regression==1);
-  assert(balanceStart==0 || balanceStart==1);
-  wrap(p,pheno,adprop,f,model,s,cov,mIter,tol,loci,nThreads,outFile,balanceStart,regression);
+
+  fprintf(logFile,"Command had following options :\t -p %s -o %s ",pname,outname);
+  fprintf(logFile,"-c %s -y %s -Q %s -a %s -f %s -i %i -t %f -m %i -l %i -r %i ",covname,phename,qname,adname,freqname,mIter,tol,model,regression,seed);
+  fprintf(logFile,"-P %i -b %s\n",nThreads,startname);
+  fprintf(logFile,"\n");
+  fprintf(logFile,"Seed is: %i\n",seed);
+  fprintf(logFile,"\n");
+  fprintf(logFile,"Done reading file: '%s' with dim ncol: %zu\tnrow: %zu\n",pname,p->y,p->x);
+  fprintf(logFile,"Done reading file: '%s' containing nrows: %zu\tncols: %zu\n",covname,cov.mx,cov.my);
+  fprintf(logFile,"Done reading file: '%s' containing nitems: %zu\n",phename,pheno.size());
+  if(adname!=NULL){
+    fprintf(logFile,"Done reading file: '%s' containing nitems: %zu\n",adname,adprop.size());
+  } else{
+    fprintf(logFile,"Done reading file: '%s' containing nitems: %zu\n",qname,adprop.size());
+  }
+  fprintf(logFile,"Done reading file: '%s' containing nrows: %zu\tncols: %zu\n",freqname,f.mx,f.my);
+  
+  wrap(p,pheno,adprop,f,model,s,cov,mIter,tol,loci,nThreads,outFile,logFile,regression);
 
   //cleanup
   kill_plink(p);
@@ -245,6 +285,9 @@ int main(int argc,char **argv){
   free(freqname);
   free(startname);
   */
+
+  fclose(logFile);
+  fclose(outFile);
   
   for(int i=0;i<cov.dx;i++){
     delete [] cov.d[i];

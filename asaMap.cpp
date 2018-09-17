@@ -73,6 +73,7 @@ void getFit(double* start, double* Y, double** covMatrix, const double* weights,
 	 XtX[x*nEnv+y]+=xw[i*nEnv+x]*xw[i*nEnv+y];
 
 
+
 #if 0
    //print before inversion
    fprintf(stderr,"BEFORE:\n");
@@ -151,6 +152,7 @@ void getFit(double* start, double* Y, double** covMatrix, const double* weights,
  }
 
 
+
 void getFitBin(double* start, double* Y, double** covMatrix, const double* weights, int nInd4, int nEnv, int df){
    //  fprintf(stderr,"%s: nInd4:%d nEnv:%d df:%d\n",__FUNCTION__,nInd4,nEnv,df);
 
@@ -207,7 +209,8 @@ void getFitBin(double* start, double* Y, double** covMatrix, const double* weigh
      //linkinv
      mu[i] = 1 / (1 + exp(-eta[i]));
    }
-   
+
+   double mu0[nIndW];
    double muetaval[nIndW];
    double z[nIndW];
    double w[nIndW];
@@ -215,6 +218,7 @@ void getFitBin(double* start, double* Y, double** covMatrix, const double* weigh
    double XtX[nEnv*nEnv] = {0};
    double Xt_y[nEnv] = {0};
    double invXtX_Xt_y[nEnv] = {0}; 
+   int iter = 0;
    
    // we run this 20 times...
    // PROBABLY SHOULD PUT SOME BREAKING CRITERIA
@@ -243,7 +247,6 @@ void getFitBin(double* start, double* Y, double** covMatrix, const double* weigh
      // thereby the same as taking rows of transposed first matrix (cols of org) and putting it on all columns of second matrix
      for(int x=0;x<nEnv;x++){
        for(int y=0;y<nEnv;y++){
-	 XtX[x*nEnv+y]=0;
 	 for(int i=0;i<nIndW;i++){
 	   // t(xw) %*% xw
 	   XtX[x*nEnv+y]+=(covMatrix[i][x]*w[i])*(covMatrix[i][y]*w[i]);
@@ -278,7 +281,6 @@ void getFitBin(double* start, double* Y, double** covMatrix, const double* weigh
      // takes first column of first matrix and puts on first and only column of second matrix
      // takes second column of first matrix and puts on first and only column of second matrix
      for(int x=0;x<nEnv;x++){
-       Xt_y[x]=0;
        for(int i=0;i<nIndW;i++){	 
 	 Xt_y[x] += (covMatrix[i][x]*w[i])*(z[i]*w[i]);
        }       
@@ -300,15 +302,31 @@ void getFitBin(double* start, double* Y, double** covMatrix, const double* weigh
        for(int x=0;x<nEnv;x++)
 	 eta[i] += covMatrix[i][x]*start[x];
      }
+     double diff = 0;
+     
      // mu
      for(int i=0;i<nIndW;i++){
        //linkinv
        mu[i] = 1 / (1 + exp(-eta[i]));
+
+       // we cannot do this for first iteration
+       // this will see diff between previous (mu0) and current iteration (mu)
+
+       // fabs is absolute value for floats, abs is for ints
+       diff += fabs(mu[i]-mu0[i]);
+
+       // mu0 has values of previous iteration
+       mu0[i] = 1 / (1 + exp(-eta[i]));    
+     }
+
+     if(diff<1e-4 & iter>0){
+       break;
      }
 
      //not sure I have to calculate residuals...
      
      // clear those that have +=
+     // much faster than setting values 0 than in for loop
      memset(XtX, 0, sizeof(XtX));
      memset(Xt_y, 0, sizeof(Xt_y));
      memset(invXtX_Xt_y, 0, sizeof(invXtX_Xt_y));
@@ -335,6 +353,7 @@ void getFitBin(double* start, double* Y, double** covMatrix, const double* weigh
    }
    
 }
+
 
 //pat[add/rec][x1/x2][X][g]
 char pat[2][5][4][3] = {
@@ -1145,6 +1164,7 @@ void asamEM(pars *p){
     } else{
       printNan(p,2);
     }
+
     
     //////////// do R4 ///////////////
     //cbind gs and covs into design M4:
@@ -1232,10 +1252,14 @@ void asamEM(pars *p){
     // emil - start gets values in getFit - therefore ok with NAN values
     for(int i=0;i<p->design->dy+2;i++)
       p->start[i]=NAN;
-
-    // fitting a model with current R6 design matrix, getting the coefs (stored in start) - (Ordinary least squares)
-    getFit(p->start,p->ys,p->design->d,NULL,p->design->dx,p->design->dy,-1);
-         
+    
+    if(p->regression==0){  
+      // fitting a model with current R6 design matrix, getting the coefs (stored in start) - (Ordinary least squares)
+      getFit(p->start,p->ys,p->design->d,NULL,p->design->dx,p->design->dy,-1);
+    } else{
+      getFitBin(p->start,p->ys,p->design->d,NULL,p->design->dx,p->design->dy,-1);      
+    }
+    
     // generating full design matrix for likelihood calculations
     mkDesign(p);
     
@@ -1287,10 +1311,13 @@ void asamEM(pars *p){
     // emil - start gets values in getFit - these are the coefs
     for(int i=0;i<p->design->dy+4;i++)
       p->start[i]=NAN;
-    
-    getFit(p->start,p->ys,p->design->d,NULL,p->design->dx,p->design->dy,-1);
 
-    
+    if(p->regression==0){  
+      // fitting a model with current R6 design matrix, getting the coefs (stored in start) - (Ordinary least squares)
+      getFit(p->start,p->ys,p->design->d,NULL,p->design->dx,p->design->dy,-1);
+    } else{
+      getFitBin(p->start,p->ys,p->design->d,NULL,p->design->dx,p->design->dy,-1);      
+    }       
     
     // it somehow needs full design matrix for likelihood calculations
     // WHAT IS THIS???????
