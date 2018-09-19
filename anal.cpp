@@ -70,8 +70,6 @@ void rstart2(double *ary,size_t l, const std::vector<double> &phe, double fMin, 
     ary[i] = fMin + f * (fMax - fMin);
    //  fprintf(stderr,"ary[%d]:%f\n",i,ary[i]);
   }
-
-
   
   // emil - for sd estimate use sd of y
   ary[l]=sd2(phe);
@@ -158,38 +156,9 @@ pars *init_pars(size_t l,size_t ncov,int model,int maxInter,double tole,std::vec
 
     }
   }
-
-  if(p->model==0){
-    fprintf(stderr,"Starting values are:\t");
-    fprintf(logFile,"Starting values are:\t");
-    // starting values equal to covs + 4 (3 for add columns + sd(y) column)
-    for(int i=0;i<p->covs->dy+4;i++){
-      fprintf(stderr, "%f ",p->start[i]);
-      fprintf(logFile, "%f ",p->start[i]);
-    }
-    fprintf(stderr,"\n");
-    fprintf(logFile,"\n");  
-    memcpy(p->start,p->start0,sizeof(double)*(p->covs->dy+4));
-    
-  } else{
-    // if rec model - copy all starting values ncov + 6
-    fprintf(stderr,"Starting values are:\t");
-    fprintf(logFile,"Starting values are:\t");
-    // starting values equal to covs + 6 (5 for rec columns + sd(y) column)
-    for(int i=0;i<p->covs->dy+6;i++){
-      fprintf(stderr, "%f ",p->start[i]);
-      fprintf(logFile, "%f ",p->start[i]);
-    }
-    fprintf(stderr,"\n");
-    fprintf(logFile,"\n");  
-    memcpy(p->start,p->start0,sizeof(double)*(p->covs->dy+6));
-    
-  }
-  
-  
+   
   //copy it to the start0 which will be copied to start for each new site
   // emil has to be + 4, because also needs to copy sd(y) - last value of start
-
   if(model==0){
     memcpy(p->start0,p->start,sizeof(double)*(ncov+4));
   } else{
@@ -207,8 +176,16 @@ void set_pars(pars*p, char *g,const std::vector<double> &phe, const std::vector<
   for(int i=0;i<phe.size();i++){
       if(g[i]!=3){
 	// not reading in those with missing genotype!!
-	p->gs[p->len] = 2-g[i];//DRAGON 
+	p->gs[p->len] = 2-g[i];//DRAGON
 	p->ys[p->len] = phe[i];
+	
+	//if logistic regression check if phenotypes are 0 or 1
+	if(p->regression==1){
+	  if(phe[i]!=0 and phe[i]!=1){
+	    fprintf(stderr,"Phenotypes are not binary (0 or 1) for logistic model!\n");    
+	    exit(1);
+	  }
+	}
 
 	p->qvec[p->len] = ad[i];
 
@@ -235,6 +212,8 @@ void set_pars(pars*p, char *g,const std::vector<double> &phe, const std::vector<
   p->covs->dy=cov.dy+1;
   p->mafs = freq;
 
+  /* EMIL - IS THIS NEEDED? SCALING COVARIATES
+  
   //try and protect from getting a too large (X^T*W*X) matrix, that is to be inverted
   //by dividing the start value for the covariate with too high mean with 1/mean(covariate)
   double sum = 0;
@@ -256,7 +235,9 @@ void set_pars(pars*p, char *g,const std::vector<double> &phe, const std::vector<
 	p->covs->d[i][j] = p->covs->d[i][j]/(max*0.5);
       }
     }
-  }               
+  }             
+
+  EMIL end */  
   
   for(int i=0;i<p->len;i++){
     for(int j=0;j<4;j++){
@@ -289,10 +270,31 @@ void wrap(const plink *plnk,const std::vector<double> &phe,const std::vector<dou
   }
   //we prep for threading. By using encapsulating all data need for a site in struct called pars
   pars *p=init_pars(plnk->x,cov.dy,model,maxIter,tol,start,phe,regression,logFile);
+
   
+  // print starting values!!
+  if(p->model==0){
+    fprintf(stderr,"Starting values are:\t"); fprintf(logFile,"Starting values are:\t");
+    // starting values equal to covs + 4 (3 for add columns + sd(y) column)
+    for(int i=0;i<p->ncov+4;i++){
+      fprintf(stderr, "%f ",p->start[i]); fprintf(logFile, "%f ",p->start[i]);
+    }
+    fprintf(stderr,"\n"); fprintf(logFile,"\n");      
+  } else{
+    // if rec model - copy all starting values ncov + 6
+    fprintf(stderr,"Starting values are:\t"); fprintf(logFile,"Starting values are:\t");
+    // starting values equal to covs + 6 (5 for rec columns + sd(y) column)
+    for(int i=0;i<p->ncov+6;i++){
+      fprintf(stderr, "%f ",p->start[i]); fprintf(logFile, "%f ",p->start[i]);
+    }
+    fprintf(stderr,"\n"); fprintf(logFile,"\n");      
+  }
+  
+
+  int analysedSites = 0;
   for(int y=0;y<plnk->y;y++){//loop over sites
     
-    fprintf(stderr,"Parsing site:%d\r",y);
+    fprintf(stderr,"Parsing site:%d\n",y);
     int cats2[4] = {0,0,0,0};
    
     for(int x=0;x<plnk->x;x++)//similar to above but with transposed plink matrix
@@ -328,11 +330,17 @@ void wrap(const plink *plnk,const std::vector<double> &phe,const std::vector<dou
     set_pars(p,d[y],phe,ad,freq.d[y],start,cov,loci[y]);
 
     main_anal((void*)p);
+    analysedSites++;
     fprintf(outFile,"%s\t%s\n",p->bufstr.s,p->tmpstr.s);
     p->bufstr.l=p->tmpstr.l=0;
     //break;
 
   }
+
+  // write how many sites analysed 
+  fprintf(stderr,"Number of analysed sites is:\t %i",analysedSites);
+  fprintf(logFile,"Number of analysed sites is:\t %i",analysedSites);
+  
   fprintf(stderr,"\t-> done\n");
   kill_pars(p,plnk->x);
  

@@ -116,8 +116,8 @@ void getFit(double* start, double* Y, double** covMatrix, const double* weights,
 
    for(int x=0;x<nEnv;x++){
      start[x]=invXtX_Xt_y[x];
-   }
-       
+   }   
+   
    double yTilde[nInd4];
    for(int i=0;i<nInd4;i++)
      yTilde[i] = 0;
@@ -138,6 +138,7 @@ void getFit(double* start, double* Y, double** covMatrix, const double* weights,
      }
 
    }
+
 
    // why did weights change here...?
    // apparently because of residuals variable, where I wrote out of bounds and ended up writing to weights
@@ -172,8 +173,7 @@ void getFitBin(double* start, double* Y, double** covMatrix, const double* weigh
    char nonZeroWeight[nInd4];
    memset(nonZeroWeight,0,nInd4);
    if(weights==NULL){
-     nIndW=nInd4;
-     
+     nIndW=nInd4;     
      memset(nonZeroWeight,1,nInd4);
    } else{
      for(int i=0;i<nInd4;i++){
@@ -185,19 +185,34 @@ void getFitBin(double* start, double* Y, double** covMatrix, const double* weigh
        }
      }
    }
+   
+   //  fprintf(stderr,"nnIndW:%d\n",nIndW);
+   double yw[nIndW]; //<-stripped phenos scaled by stripped weights
+   double ww[nIndW]; //<-stripped weights
+   double xw[nIndW*nEnv]; //<-stripped designs
 
-   double mustart[nIndW];
-   // if weights do not exists, have all weights be 1
-   if(weights==NULL){     
-     for(int i=0;i<nIndW;i++){
-       mustart[i] = (1*Y[i] + 0.5)/(1 + 1);
-     }
-   } else{     
-     for(int i=0;i<nIndW;i++){
-       mustart[i] = (weights[i]*Y[i] + 0.5)/(weights[i] + 1);
+   int cnt=0;
+   for(int i=0;i<nInd4;i++){
+     if(nonZeroWeight[i]){
+       yw[cnt] = Y[i];
+       if(weights==NULL){
+	 ww[cnt] = 1;
+       } else{
+	 ww[cnt] = weights[i];
+       }
+       for(int j=0;j<nEnv;j++){
+	 xw[cnt*nEnv+j] = covMatrix[i][j];
+       }
+       cnt++;
      }
    }
    
+   double mustart[nIndW];
+   // if weights do not exists, have all weights be 1     
+   for(int i=0;i<nIndW;i++){
+     mustart[i] = (ww[i]*yw[i] + 0.5)/(ww[i] + 1);
+   }
+    
    double eta[nIndW];
    for(int i=0;i<nIndW;i++){
      //link
@@ -228,17 +243,12 @@ void getFitBin(double* start, double* Y, double** covMatrix, const double* weigh
        // because mu is same as linkinv(eta)
        muetaval[i] = mu[i]*(1-mu[i]); 
      }
-               
+
+     // add nonZeriWeight here!!
      for(int i=0;i<nIndW;i++){
        // can be calculated together as do not depent on eachother
-       z[i] = eta[i]+(Y[i]-mu[i])/muetaval[i];
-
-       if(weights==NULL){
-	 w[i] = sqrt( (1*(muetaval[i]*muetaval[i])) / (mu[i]*(1-mu[i])) );
-       } else{
-	 w[i] = sqrt( (weights[i]*(muetaval[i]*muetaval[i])) / (mu[i]*(1-mu[i])) );
-       }
-
+       z[i] = eta[i]+(yw[i]-mu[i])/muetaval[i];       
+       w[i] = sqrt( (ww[i]*(muetaval[i]*muetaval[i])) / (mu[i]*(1-mu[i])) );       
      }
       
      // this is doing the matrix product of (X)^T*W*X
@@ -249,11 +259,11 @@ void getFitBin(double* start, double* Y, double** covMatrix, const double* weigh
        for(int y=0;y<nEnv;y++){
 	 for(int i=0;i<nIndW;i++){
 	   // t(xw) %*% xw
-	   XtX[x*nEnv+y]+=(covMatrix[i][x]*w[i])*(covMatrix[i][y]*w[i]);
+	   //XtX[x*nEnv+y]+=(covMatrix[i][x]*w[i])*(covMatrix[i][y]*w[i]);
+	   XtX[x*nEnv+y]+=xw[i*nEnv+x]*w[i]*xw[i*nEnv+y]*w[i];
 	 }
        }
      }
-
      
 #if 0
      //print before inversion
@@ -282,7 +292,7 @@ void getFitBin(double* start, double* Y, double** covMatrix, const double* weigh
      // takes second column of first matrix and puts on first and only column of second matrix
      for(int x=0;x<nEnv;x++){
        for(int i=0;i<nIndW;i++){	 
-	 Xt_y[x] += (covMatrix[i][x]*w[i])*(z[i]*w[i]);
+	 Xt_y[x] += xw[i*nEnv+x]*w[i]*z[i]*w[i];
        }       
      }
 
@@ -300,7 +310,7 @@ void getFitBin(double* start, double* Y, double** covMatrix, const double* weigh
        // clear values of eta
        eta[i]=0;
        for(int x=0;x<nEnv;x++)
-	 eta[i] += covMatrix[i][x]*start[x];
+	 eta[i] += xw[i*nEnv+x]*start[x];
      }
      double diff = 0;
      
@@ -332,11 +342,13 @@ void getFitBin(double* start, double* Y, double** covMatrix, const double* weigh
      memset(invXtX_Xt_y, 0, sizeof(invXtX_Xt_y));
      
    }
+
+   /* EMIL - IS THIS PART NEEDED?
    
    // this is doing the matrix product of (X)^T*W*X    
    for(int i=0;i<nIndW;i++)
      for(int x=0;x<nEnv;x++)
-       eta[i] += covMatrix[i][x]*start[x];
+       eta[i] += xw[i*nEnv+x]*start[x];
    
    for(int i=0;i<nIndW;i++){
      //linkinv
@@ -352,6 +364,7 @@ void getFitBin(double* start, double* Y, double** covMatrix, const double* weigh
      yTilde[i] = (Y[i] - mu[i]) / (mu[i]*(1-mu[i]));
    }
    
+   */
 }
 
 
@@ -419,17 +432,18 @@ double dnorm(double x,double mean,double sd){
   return fac*val;
 }
 
-double logdnorm(double x, double mean, double sd){
-    
-  double fac = 1.0/(sd*sqrt(2.0*M_PI));
-  double val = exp(-(((x-mean)*(x-mean))/(2*sd*sd)));  
-  return log(fac*val);
+double logdnorm(double x, double mean, double sd){    
+  double fac = log(1.0/(sd*sqrt(2.0*M_PI)));
+  //log of exp(-(((x-mean)*(x-mean))/(2*sd*sd))), exp causes overflow
+  double val = -(((x-mean)*(x-mean))/(2*sd*sd));
+  return (fac+val);
 }
+
 
 // from /home/albrecht/github/angsd/fet.c
 // getting log of binomial
 // log\binom{n}{k}
-static double lbinom(int n, int k){
+double lbinom(int n, int k){
   if (k == 0 || n == k) return 0;
   return lgamma(n+1) - lgamma(k+1) - lgamma(n-k+1);
 }
@@ -489,8 +503,8 @@ double updateEM(double *start,Matrix<double> *design,Matrix<double> *ysCgs,doubl
   for(int i=0;i<=design->dy;i++)
     fprintf(stderr,"%f ",start[i]);
   fprintf(stderr,"\n");
-#endif 
-  
+#endif
+    
   double ret;
   for(int i=0;i<design->dx;i++){
     double m = 0;
@@ -568,8 +582,8 @@ double logupdateEM(double *start,Matrix<double> *design,Matrix<double> *ysCgs,do
       m += design->d[i][j]*start[j];
     }
     if(regression==0){
-      // density function of normal distribution   
-      m = logdnorm(pheno[i],m,start[design->dy]);      
+      // density function of normal distribution
+      m = logdnorm(pheno[i],m,start[design->dy]);
     } else{        
       // density function of binomial distribution   
       m = logdbinom(pheno[i],1,(exp(m)/(exp(m)+1)));      
@@ -578,7 +592,6 @@ double logupdateEM(double *start,Matrix<double> *design,Matrix<double> *ysCgs,do
     double tmp = m + log(p_sCg[i]);
     //    fprintf(stderr,"(%lu,%d):%f\n",(size_t)floor(i/4),i %4,tmp);
     ysCgs->d[(size_t)floor(i/4)][i % 4] = tmp;
-    
   }
 
   // dx is number of indis, dy is 4
@@ -589,12 +602,14 @@ double logupdateEM(double *start,Matrix<double> *design,Matrix<double> *ysCgs,do
   double ycGs[ysCgs->dx];
   for(int i=0;i<ysCgs->dx;i++){
     double tmp = 0;
+    double maxval = ysCgs->d[i][0];
     for(int j=0;j<ysCgs->dy;j++){
-      // attempt at creating logSum: log(p1+p2+p3+p4) - seems to work (compared with R-code)
-      tmp += exp(ysCgs->d[i][j]);
+      // find max - part of trick for doing log(p1+p2+p3+p4)
+      maxval = std::max(maxval,ysCgs->d[i][j]);     
     }
-    ycGs[i] = log(tmp);
-    //if(ycGs[i]!=ycGs[i]){ fprintf(stderr,"ycGs[i] is nan, log(tmp) %f, ysCgs->d[i][j] %f\n",log(tmp),ysCgs->d[i][0]); exit(0); }
+    // trick to avoid over/underflow - log(exp(log(val1)-log(max)) + ...) + log(max) = (exp(log(val1))/exp(log(max)))*(max) + ...
+    // same (exp(log(val1))/exp(log(max)))*(max)
+    ycGs[i] = log(exp(ysCgs->d[i][0]-maxval)+exp(ysCgs->d[i][1]-maxval)+exp(ysCgs->d[i][2]-maxval)+exp(ysCgs->d[i][3]-maxval)) + maxval;  
   }
 
   // divide each entry of a row with sum of that row
@@ -614,7 +629,13 @@ double logupdateEM(double *start,Matrix<double> *design,Matrix<double> *ysCgs,do
     for(int j=0;j<ysCgs->dy;j++){
       weigths[a++] = exp(ysCgs->d[i][j]);
       //fprintf(stdout,"%f ",weigths[a-1]);
-    }
+
+      //check if issue with weights
+      if(exp(ysCgs->d[i][j])!=exp(ysCgs->d[i][j]) or std::isinf(exp(ysCgs->d[i][j]))){
+	  fprintf(stderr,"Issue with weights being nan or inf\n");
+	  exit(1);	  
+	}
+    }   
   
   if(regression==0){
     //double resi[nInd];
@@ -632,10 +653,8 @@ double logupdateEM(double *start,Matrix<double> *design,Matrix<double> *ysCgs,do
   return logLike(start,pheno,design,p_sCg,regression);
 }
 
-
 inline double updateEMP(pars *p){  
   return logupdateEM(p->start,p->design,p->ysCgs,p->pheno,p->len,p->p_sCg,p->regression);
-  //return updateEM(p->start,p->design,p->ysCgs,p->pheno,p->len,p->p_sCg);
 }
 
 
@@ -772,14 +791,11 @@ void mkDesign(pars *p){
 	for(int j=0;j<4;j++){
 	  p->design->d[i*4+j][5+c] = p->covs->d[i][c];
 	}
-    }
-            
+    }            
     // emil - now design has 5 columns (alternative allele also) + number of covariates
     p->design->dy=p->covs->dy+5;
-  }
-   
+  }   
    p->design->dx=p->len*4;
-
 }
 
 void controlEM(pars *p){
@@ -801,7 +817,6 @@ void controlEM(pars *p){
 	 memcpy(p->start,pars0,sizeof(double)*(p->design->dy+1));	
 	 break;
        }
-
     }
     llh0=llh1;   
     memcpy(pars0,p->start,sizeof(double)*(p->design->dy+1));   
@@ -869,7 +884,7 @@ void asamEM(pars *p){
 
   int maf0=1;
   int maf1=1;
-  // if to rare do not run analysis
+  // if too rare do not run analysis
   if(p->mafs[0]>0.995||p->mafs[0]<0.005){
     maf0=0;
   }
@@ -892,8 +907,6 @@ void asamEM(pars *p){
     } else{
       printNan(p,0);
     }
-
-
     
     //////////// do M1 ///////////////
     
@@ -914,7 +927,6 @@ void asamEM(pars *p){
     } else{
       printNan(p,2);
     }
-
     
     //////////// do M2 ///////////////
     //remove column2 and second value from start M2
@@ -990,8 +1002,7 @@ void asamEM(pars *p){
       getFitBin(p->start,p->ys,p->design->d,NULL,p->design->dx,p->design->dy,-1);
     }
       
-    // it somehow needs full design matrix for likelihood calculations
-    // WHAT IS THIS???????
+    // generating full design matrix for likelihood calculations
     mkDesign(p);
     
     // has to put genotype as first column - design has 4 rows for each indi - REMEMBER THAT!!
@@ -1013,7 +1024,6 @@ void asamEM(pars *p){
 	p->start[i] = p->start[i-2];
       }
     }
-
     
     p->start[2]=p->start[1]=0;
   
@@ -1046,6 +1056,8 @@ void asamEM(pars *p){
     } else{
       getFitBin(p->start,p->ys,p->design->d,NULL,p->design->dx,p->design->dy,-1);
     }
+
+    // generating full design matrix for likelihood calculations
     mkDesign(p);
         
     // skips A1,A2 for me has to skip both A1,A2 and B1 (column 1,2 and 3 design matrix)
@@ -1318,9 +1330,8 @@ void asamEM(pars *p){
     } else{
       getFitBin(p->start,p->ys,p->design->d,NULL,p->design->dx,p->design->dy,-1);      
     }       
-    
-    // it somehow needs full design matrix for likelihood calculations
-    // WHAT IS THIS???????
+
+    // generating full design matrix for likelihood calculations
     mkDesign(p);
     
     // emil - has to skip both R1, R2, Rm, delta1 and delta2 (column 1, 2, 3, 4 and 5 design matrix)
