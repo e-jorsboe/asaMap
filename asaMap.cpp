@@ -601,6 +601,7 @@ double logupdateEM(double *start,Matrix<double> *design,Matrix<double> *ysCgs,do
     } else{      
       double prob = exp(m)/(exp(m)+1.0);
       // now handling if p is 0 or 1 (makes it very small or large)
+      // before I had issues with getting inf or nan values - because were taking log of 0!!
       m = logbernoulli(pheno[i],prob);
     }
     
