@@ -460,6 +460,19 @@ double dbinom(int k, int n,double p){
 }
 
 
+double logbernoulli(int k, double p){
+
+  // if p is 0 or 1, cannot do log
+  // however this because of over/underlow and p i just very close 0 or 1
+  if(p>1-1e-6){
+    p = 1-1e-6;
+  } else if(p<1e-6){
+    p = 1e-6;
+  } 
+    return( log(pow(p,k)*pow(1-p,1-k)) );
+}
+
+
 double logLike(double *start,double* pheno,Matrix<double> *design,double *p_sCg,int regression){
   double ret = 0;
 #if 0
@@ -581,12 +594,14 @@ double logupdateEM(double *start,Matrix<double> *design,Matrix<double> *ysCgs,do
     for(int j=0;j<design->dy;j++){
       m += design->d[i][j]*start[j];
     }
+
     if(regression==0){
       // density function of normal distribution
-      m = logdnorm(pheno[i],m,start[design->dy]);
-    } else{        
-      // density function of binomial distribution   
-      m = logdbinom(pheno[i],1,(exp(m)/(exp(m)+1)));      
+      m = logdnorm(pheno[i],m,start[design->dy]);      
+    } else{      
+      double prob = exp(m)/(exp(m)+1.0);
+      // now handling if p is 0 or 1 (makes it very small or large)
+      m = logbernoulli(pheno[i],prob);
     }
     
     double tmp = m + log(p_sCg[i]);
