@@ -293,8 +293,12 @@ void wrap(const plink *plnk,const std::vector<double> &phe,const std::vector<dou
 
   int analysedSites = 0;
   for(int y=0;y<plnk->y;y++){//loop over sites
+
+    // parsing site with index 100 (0-indexed so 101th site) - but will have parsed 100 sites
+    if(y % 100==0){
+      fprintf(stderr,"Parsed sites:%d\n",y);
+    }
     
-    fprintf(stderr,"Parsing site:%d\n",y);
     int cats2[4] = {0,0,0,0};
    
     for(int x=0;x<plnk->x;x++)//similar to above but with transposed plink matrix
@@ -338,8 +342,8 @@ void wrap(const plink *plnk,const std::vector<double> &phe,const std::vector<dou
   }
 
   // write how many sites analysed 
-  fprintf(stderr,"Number of analysed sites is:\t %i",analysedSites);
-  fprintf(logFile,"Number of analysed sites is:\t %i",analysedSites);
+  fprintf(stderr,"Number of analysed sites is:\t %i\n",analysedSites);
+  fprintf(logFile,"Number of analysed sites is:\t %i\n",analysedSites);
   
   fprintf(stderr,"\t-> done\n");
   kill_pars(p,plnk->x);

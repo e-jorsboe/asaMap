@@ -269,6 +269,8 @@ int main(int argc,char **argv){
     fprintf(logFile,"Done reading file: '%s' containing nitems: %zu\n",qname,adprop.size());
   }
   fprintf(logFile,"Done reading file: '%s' containing nrows: %zu\tncols: %zu\n",freqname,f.mx,f.my);
+  // flush to disk - or force to write to disk
+  fflush(logFile);
   
   wrap(p,pheno,adprop,f,model,s,cov,mIter,tol,loci,nThreads,outFile,logFile,regression);
 

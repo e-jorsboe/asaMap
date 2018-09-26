@@ -473,38 +473,56 @@ double logbernoulli(int k, double p){
 }
 
 
+// emil more numerically stable - I think
 double logLike(double *start,double* pheno,Matrix<double> *design,double *p_sCg,int regression){
-  double ret = 0;
 #if 0
   for(int i=0;i<p->start_len;i++)
     fprintf(stderr,"%f ",p->start[i]);
   fprintf(stderr,"\n");
 #endif
-  
-  double tmp=0;
-  for(int i=0;i<design->dx;i++){
-    double m=0;
-    for(int j=0;j<design->dy;j++){           
-      m +=  design->d[i][j]*start[j];      
-    }
 
-    if(regression==0){
-      m = dnorm(pheno[i],m,start[design->dy]);
-    } else{      
-      m = dbinom(pheno[i],1,(exp(m)/(exp(m)+1)));
+  double tmp[design->dx];
+  double ret = 0;
+  for(int i=0;i<design->dx;i++){
+    double m = 0;
+    for(int j=0;j<design->dy;j++){
+      m += design->d[i][j]*start[j];
     }
     
-    tmp += m*p_sCg[i];
-    if((i % 4 )==3){
-
-      // same as taking log of all values and then summing and then flipping sign (plus to minus)
-      ret -= log(tmp);    
-      tmp = 0;
-    }    
+    if(regression==0){
+      // density function of normal distribution
+      m = logdnorm(pheno[i],m,start[design->dy]);      
+    } else{      
+      double prob = exp(m)/(exp(m)+1.0);
+      // now handling if p is 0 or 1 (makes it very small or large)
+      // before I had issues with getting inf or nan values - because were taking log of 0!!
+      m = logbernoulli(pheno[i],prob);
+    }
+    
+    tmp[i] = m + log(p_sCg[i]);    
     
   }
-  return ret;
+    
+  //colSumsLog
+  double maxval;
+  double sum = 0;
+  for(int i=0;i<design->dx;i++){
+    if(i % 4 == 0){
+      maxval = tmp[i];
+    } else{
+      maxval = std::max(maxval,tmp[i]);     
+    }
+    // trick to avoid over/underflow - log(exp(log(val1)-log(max)) + ...) + log(max) = (exp(log(val1))/exp(log(max)))*(max) + ...
+    // same (exp(log(val1))/exp(log(max)))*(max)
+    if(i % 3 == 0){
+      sum += log(exp(tmp[i-3]-maxval)+exp(tmp[i-2]-maxval)+exp(tmp[i-1]-maxval)+exp(tmp[i]-maxval)) + maxval;
+    }
+  }
+  
+  return(-(sum));
+  
 }
+
 
 inline double logLikeP(pars *p){
   return logLike(p->start,p->pheno,p->design,p->p_sCg,p->regression);
@@ -911,9 +929,7 @@ void asamEM(pars *p){
   // p->model is either 0 (add model) or 1 (rec model)
   if(p->model==0){
 
-    //////////// do M0 - model with also A1 ///////////////
-    
-    fprintf(stderr,"M0\n");
+    //////////// do M0 - model with also A1 ///////////////   
     
     mkDesign(p);
     p_sCg(p);
@@ -924,9 +940,7 @@ void asamEM(pars *p){
       printNan(p,0);
     }
     
-    //////////// do M1 ///////////////
-    
-    fprintf(stderr,"M1\n");    
+    //////////// do M1 ///////////////    
     
     mkDesign(p);
     p_sCg(p);
@@ -945,9 +959,7 @@ void asamEM(pars *p){
     }
     
     //////////// do M2 ///////////////
-    //remove column2 and second value from start M2
-    
-    fprintf(stderr,"M2\n");
+    //remove column2 and second value from start M2    
     
     mkDesign(p);
     p_sCg(p);
@@ -968,9 +980,7 @@ void asamEM(pars *p){
     }
          
     //////////// do M3 ///////////////
-    //remove column1 and first value from start M3
-    
-    fprintf(stderr,"M3\n");
+    //remove column1 and first value from start M3   
     
     mkDesign(p);
     p_sCg(p);
@@ -991,9 +1001,7 @@ void asamEM(pars *p){
     }
      
     //////////// do M4 ///////////////
-    //cbind gs and covs into design M4:
-    
-    fprintf(stderr,"M4\n");
+    //cbind gs and covs into design M4:    
     
     for(int i=0;i<p->covs->dx;i++){
       p->design->d[i][0] = p->gs[i];
@@ -1051,9 +1059,7 @@ void asamEM(pars *p){
     printRes(p,1); 
     
     //////////// do M5 ///////////////  
-    //cpy covs to design M5
-    
-    fprintf(stderr,"M5\n");
+    //cpy covs to design M5    
     
     for(int i=0;i<p->covs->dx;i++){
       for(int j=0;j<p->covs->dy;j++)
@@ -1088,9 +1094,7 @@ void asamEM(pars *p){
     
     
     //////////// do R0 - model with also delta1 and delta2 (rec for alternative allele) ///////////////
-    // do we want to write any of the effect sizes?
-    
-    fprintf(stderr,"R0\n");
+    // do we want to write any of the effect sizes?    
     
     mkDesign(p);
     p_sCg(p);
@@ -1102,9 +1106,7 @@ void asamEM(pars *p){
       printNan(p,0);
     }
         
-    //////////// do R1 ///////////////
-    
-    fprintf(stderr,"R1\n");
+    //////////// do R1 ///////////////    
         
     mkDesign(p);
     p_sCg(p);
@@ -1128,9 +1130,7 @@ void asamEM(pars *p){
     }              
 
     //////////// do R2 ///////////////
-    //remove column2 and second value from start M2
-    
-    fprintf(stderr,"R2\n");
+    //remove column2 and second value from start M2    
     
     mkDesign(p);
     p_sCg(p);
@@ -1161,9 +1161,7 @@ void asamEM(pars *p){
     }           
      
     //////////// do R3 ///////////////
-    //remove column1 and first value from start M3
-    
-    fprintf(stderr,"R3\n");
+    //remove column1 and first value from start M3    
     
     mkDesign(p);
     p_sCg(p);
@@ -1195,9 +1193,7 @@ void asamEM(pars *p){
 
     
     //////////// do R4 ///////////////
-    //cbind gs and covs into design M4:
-    
-    fprintf(stderr,"R4\n");
+    //cbind gs and covs into design M4:    
         
     mkDesign(p);
     p_sCg(p);
@@ -1228,8 +1224,6 @@ void asamEM(pars *p){
     //////////// do R5 ///////////////  
     //cpy covs to design M5
 
-    fprintf(stderr,"R5\n");
-
     mkDesign(p);
     p_sCg(p);
     memcpy(p->start,p->start0,sizeof(double)*(p->design->dy+1));
@@ -1257,8 +1251,6 @@ void asamEM(pars *p){
     }
             
     //////////// do R6 ///////////////  
-
-    fprintf(stderr,"R6\n");
 
     // generating a first column of a design matrix has if recessive site (regardless ancestry)
     for(int i=0;i<p->covs->dx;i++){
@@ -1320,10 +1312,7 @@ void asamEM(pars *p){
     printRes(p,1);
  
 
-    //////////// do R7 ///////////////  
-    
-    fprintf(stderr,"R7\n");
-
+    //////////// do R7 ///////////////      
       
     for(int i=0;i<p->covs->dx;i++){
       for(int j=0;j<p->covs->dy;j++)
