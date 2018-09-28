@@ -10,7 +10,7 @@ Lines project:
 #include <ctime>
 #include "readplink.h"
 #include "analysisFunction.h"
-#include "anal.h"
+#include "analysis.h"
 
 //stupid little function to read 1,3 column of a bim file
 std::vector<char*> readBim(char *str){
@@ -209,19 +209,15 @@ int main(int argc,char **argv){
   std::srand(seed);
   fprintf(stderr,"Seed is: %i\n",seed);
   
-  plink *p = readplink(pname);
-  
+  plink *p = readplink(pname);  
   std::vector<char *> loci = readBim(pname);
-
-  fprintf(stderr,"Seed is: %s\n",pname);
-  fprintf(stderr,"Seed is: %s\n",covname);  
   Matrix<double> cov = getMatrix(covname);
 
-  fprintf(stderr,"Seed is: %s\n",covname);
   if(0){
     print(&cov,stdout);
     return 0;
   }
+  
   std::vector<double> pheno = getArray(phename);
   std::vector<double> adprop(pheno.size());
   if(qname!=NULL){

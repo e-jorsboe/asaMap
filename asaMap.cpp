@@ -2,11 +2,14 @@
 #include <cmath>
 #include <cassert>
 #include "asaMap.h"
-#include "anal.h"
+#include "analysis.h"
 #include "readplink.h"
 #include <cstring>
 #include <cfloat>
 #include "kstring.h"
+
+// if under/overflow causes some value to go below this, use this value
+double lower_bound = 1e-20;
 
 // fits a linear model using weighted least squares, 4 observations per individual -
 // up to 4 possible states, when geno is known
@@ -428,8 +431,16 @@ char pat[2][5][4][3] = {
 double dnorm(double x,double mean,double sd){
     
   double fac = 1.0/(sd*sqrt(2.0*M_PI));
-  double val = exp(-(((x-mean)*(x-mean))/(2*sd*sd)));  
-  return fac*val;
+  double val = exp(-(((x-mean)*(x-mean))/(2*sd*sd)));
+  
+  // if val is 0 because exp(-(x-mean)*(x-mean)) is due to underflow, returns low value
+  if(val<lower_bound){
+    return(lower_bound);
+  } else{
+    return fac*val;
+  }
+
+
 }
 
 double logdnorm(double x, double mean, double sd){    
@@ -464,17 +475,64 @@ double logbernoulli(int k, double p){
 
   // if p is 0 or 1, cannot do log
   // however this because of over/underlow and p i just very close 0 or 1
-  if(p>1-1e-6){
-    p = 1-1e-6;
-  } else if(p<1e-6){
-    p = 1e-6;
+  if(p>1-lower_bound){
+    p = 1-lower_bound;
+  } else if(p<lower_bound){
+    p = lower_bound;
   } 
     return( log(pow(p,k)*pow(1-p,1-k)) );
 }
 
+double bernoulli(int k, double p){
+
+  // if p is 0 or 1, cannot do log
+  // however this because of over/underlow and p i just very close 0 or 1
+  if(p>1-lower_bound){
+    p = 1-lower_bound;
+  } else if(p<lower_bound){
+    p = lower_bound;
+  } 
+    return( pow(p,k)*pow(1-p,1-k) );
+}
+
+
+
+double logLike(double *start,double* pheno,Matrix<double> *design,double *p_sCg,int regression){
+  double ret = 0;
+#if 0
+  for(int i=0;i<p->start_len;i++)
+    fprintf(stderr,"%f ",p->start[i]);
+  fprintf(stderr,"\n");
+#endif
+      
+  double tmp=0;
+  for(int i=0;i<design->dx;i++){
+    double m=0;
+    for(int j=0;j<design->dy;j++){           
+      m +=  design->d[i][j]*start[j];      
+    }
+
+    if(regression==0){
+      m = dnorm(pheno[i],m,start[design->dy]);
+    } else{      
+      m = bernoulli(pheno[i],(exp(m)/(exp(m)+1)));
+    }
+    
+    tmp += m*p_sCg[i];
+    if((i % 4 )==3){
+
+      // same as taking log of all values and then summing and then flipping sign (plus to minus)
+      ret -= log(tmp);    
+      tmp = 0;
+    }    
+    
+  }
+
+  return ret;
+}
 
 // emil more numerically stable - I think
-double logLike(double *start,double* pheno,Matrix<double> *design,double *p_sCg,int regression){
+double logLike2(double *start,double* pheno,Matrix<double> *design,double *p_sCg,int regression){
 #if 0
   for(int i=0;i<p->start_len;i++)
     fprintf(stderr,"%f ",p->start[i]);

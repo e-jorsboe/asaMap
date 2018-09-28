@@ -1,6 +1,6 @@
 #include <cmath>
 #include "readplink.c"
-#include "anal.h"
+#include "analysis.h"
 #include "asaMap.h"
 #include "analysisFunction.h"
 
@@ -168,30 +168,64 @@ pars *init_pars(size_t l,size_t ncov,int model,int maxInter,double tole,std::vec
 }
 
 
-void set_pars(pars*p, char *g,const std::vector<double> &phe, const std::vector<double> &ad, double *freq, std::vector<double> start, Matrix<double> &cov, char *site){
+void check_pars(pars* p, const std::vector<double> &phe, Matrix<double> &cov){
 
-  p->len=0;
   // check if all values of first column in cov file is 1
   int interceptChecker = 0;
+  // check if phenotype 0 or 1 - for quantitative
+  int isBinaryQuan = 1;
+  for(int i=0;i<phe.size();i++){
+	//if logistic regression check if phenotypes are 0 or 1
+	if(p->regression==1){
+	  isBinaryQuan = 0;
+	  if(phe[i]!=0 and phe[i]!=1){
+	    fprintf(stderr,"Phenotypes are not binary (0 or 1) for logistic model!\n");    
+	    exit(1);
+	  }
+	} else{
+	  if(phe[i]!=0 and phe[i]!=1){
+	    isBinaryQuan = 0;
+	  }
+	}       
+
+	if(cov.d[i][0]==1){
+	  interceptChecker++;
+	}
+  }
+    
+  if(isBinaryQuan){
+    fprintf(stderr,"\n");
+    fprintf(stderr,"#######################################################################################\n");
+    fprintf(stderr,"#######################################################################################\n");
+    fprintf(stderr,"WARNING: Phenotype for linear model appears to be binary, run a logistic model instead!\n");
+    fprintf(stderr,"#######################################################################################\n");
+    fprintf(stderr,"#######################################################################################\n");
+    fprintf(stderr,"\n");
+  }
+
+  if(interceptChecker==p->len){
+    fprintf(stderr,"Column of 1s for intercept should not be included in covariate,\n");
+    fprintf(stderr,"as this will be added automatically.\n");    
+    exit(1);
+  }
+
+  
+}
+
+
+
+void set_pars(pars*p, char *g,const std::vector<double> &phe, const std::vector<double> &ad, double *freq, std::vector<double> start, Matrix<double> &cov, char *site){
+
+  // because has to count up how many individuals analysed for this site - due to missing genotypes
+  p->len=0;
   for(int i=0;i<phe.size();i++){
       if(g[i]!=3){
 	// not reading in those with missing genotype!!
 	p->gs[p->len] = 2-g[i];//DRAGON
 	p->ys[p->len] = phe[i];
 	
-	//if logistic regression check if phenotypes are 0 or 1
-	if(p->regression==1){
-	  if(phe[i]!=0 and phe[i]!=1){
-	    fprintf(stderr,"Phenotypes are not binary (0 or 1) for logistic model!\n");    
-	    exit(1);
-	  }
-	}
-
 	p->qvec[p->len] = ad[i];
 
-	if(cov.d[i][0]==1){
-	  interceptChecker++;
-	}
 	// only has number of covariates, in covariates file
 	for(int c=1;c<=cov.dy;c++){	     
 	  p->covs->d[p->len][0] = 1;
@@ -199,12 +233,6 @@ void set_pars(pars*p, char *g,const std::vector<double> &phe, const std::vector<
 	}
 	p->len++;
     }
-  }
-
-  if(interceptChecker==p->len){
-    fprintf(stderr,"Column of 1s for intercept should not be included in covariate,\n");
-    fprintf(stderr,"as this will be added automatically.\n");    
-    exit(1);
   }
   
   p->covs->dx=p->len;
@@ -271,6 +299,8 @@ void wrap(const plink *plnk,const std::vector<double> &phe,const std::vector<dou
   //we prep for threading. By using encapsulating all data need for a site in struct called pars
   pars *p=init_pars(plnk->x,cov.dy,model,maxIter,tol,start,phe,regression,logFile);
 
+  // check that pheno and covariates are OK
+  check_pars(p, phe, cov);
   
   // print starting values!!
   if(p->model==0){
