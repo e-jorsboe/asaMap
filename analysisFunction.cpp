@@ -10,6 +10,44 @@
 
 #define LENS 4096
 
+
+// checks if string is number
+int validNumber(char* someString){
+  int isNumber = 0;
+  int hasPoint = 0;
+   
+  for(int i = 0; i<strlen(someString); i++){
+    char s = someString[i];
+
+    //if negative number
+    if(i==0 and s=='-'){
+      continue;
+    }
+    
+    if(s =='.'){
+      if(hasPoint){
+	isNumber = 0;
+	break;
+      }
+      hasPoint = 1;
+      isNumber = 1;
+    } else {
+      isNumber = (s=='0' or s=='1' or s=='2' or s=='3' or s=='4' or s=='5' or s=='6' or s=='7' or s=='8' or s=='9');
+    }
+
+    // leaves loop if any not numbers
+    if(isNumber==0){
+      break;
+    }
+  }
+  
+  return(isNumber);
+  
+}
+
+
+
+
 Matrix<double> *initMatrix(size_t x,size_t y){
   Matrix<double> *r = new Matrix<double>;
   r->d = new double*[x];
@@ -95,6 +133,42 @@ std::vector<double> getArray(const char *name){
   return ret;
 }
 
+// checks if read string is a number
+std::vector<double> getArrayCheck(const char *name){
+  std::vector<double> ret;
+  if(name==NULL)
+    return ret;
+ if(!fexists(name)){
+    fprintf(stderr,"\t-> Problems opening file: %s\n",name);
+    exit(0);
+  }
+  const char* delims = " \t\n";
+  gzFile gz = Z_NULL;
+  char buffer[LENS];
+  char *save;
+  if(((gz=gzopen(name,"rb")))==Z_NULL){
+    fprintf(stderr,"Problem opening file: \'%s\'\n",name);
+    exit(0);
+  }
+
+  while(gzgets(gz,buffer,LENS)){
+    char *tok = strtok_r(buffer,delims,&save);
+    while(tok!=NULL){
+      if(validNumber(tok)){
+	ret.push_back(atof(tok));
+	tok = strtok_r(NULL,delims,&save);
+      } else{
+	fprintf(stderr,"Not valid double in file: \'%s\'\n",name);
+	exit(0);
+      }
+    }    
+  }
+  fprintf(stderr,"Done reading file: \'%s\' containing nitems:%lu \n",name,ret.size());
+  gzclose(gz);
+  return ret;
+}
+
+
 Matrix<double> getMatrix(const char *name){
   if(!fexists(name)){
     fprintf(stderr,"\t-> Problems opening file: %s\n",name);
@@ -142,6 +216,66 @@ Matrix<double> getMatrix(const char *name){
   retMat.d=data;
   retMat.dx =retMat.mx = rows.size();
   retMat.dy =retMat.my =  ncols;
+  fprintf(stderr,"Done reading file: \'%s\' containing nrows:%lu and ncols:%lu\n",name,retMat.dx,retMat.dy);
+  gzclose(gz);
+  //  assert(retMat.dx>1&&retMat.dy>1);
+  return retMat;
+
+}
+
+Matrix<double> getMatrixCheck(const char *name){
+  if(!fexists(name)){
+    fprintf(stderr,"\t-> Problems opening file: %s\n",name);
+    exit(0);
+  }
+  const char* delims = " \t\n";
+  gzFile gz = Z_NULL;
+  char buffer[LENS];
+  char* save;
+  if(((gz=gzopen(name,"rb")))==Z_NULL){
+    fprintf(stderr,"Problem opening file: \'%s\'\n",name);
+    exit(0);
+  }
+  std::list<double *> rows;
+  size_t ncols=0;
+  while(gzgets(gz,buffer,LENS)){
+   
+    if(strlen(buffer)==0)
+      continue;
+    char *tok = strtok_r(buffer,delims,&save);
+    std::list<double> items;    
+    while(tok!=NULL){
+      if(validNumber(tok)){	
+	items.push_back(atof(tok));
+	tok = strtok_r(NULL,delims,&save);
+      } else{
+	fprintf(stderr,"Not valid double in file: \'%s\'\n",name);
+	exit(0);
+      }
+    }
+    //fprintf(stderr,"[%s] ncols:%lu\n",__FUNCTION__,items.size());
+    if(ncols!=0 &ncols!=items.size()){
+      fprintf(stderr,"jagged covariance matrix: \'%s\'\n",name);
+      exit(0);
+    }
+    ncols = items.size();
+    double *drows = new double[ncols];
+    int i=0;
+    for(std::list<double>::iterator it=items.begin();it!=items.end();it++)
+      drows[i++]  = *it;
+    rows.push_back(drows);
+    
+  }
+  //  fprintf(stderr,"%s nrows:%lu\n",__FUNCTION__,rows.size());
+  double **data = new double*[rows.size()];
+  int i=0;
+  for(std::list<double*>::iterator it=rows.begin();it!=rows.end();it++)
+    data[i++]  = *it;
+  
+  Matrix<double> retMat;
+  retMat.d=data;
+  retMat.dx=retMat.mx = rows.size();
+  retMat.dy=retMat.my =  ncols;
   fprintf(stderr,"Done reading file: \'%s\' containing nrows:%lu and ncols:%lu\n",name,retMat.dx,retMat.dy);
   gzclose(gz);
   //  assert(retMat.dx>1&&retMat.dy>1);

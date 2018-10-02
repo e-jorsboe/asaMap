@@ -18,8 +18,10 @@ double getMax(double a,double b, double c);
 double addProtect2(double a,double b);
 double addProtect3(double a,double b, double c);
 Matrix<double> getMatrix(const char *name);
+Matrix<double> getMatrixCheck(const char *name);
 
 std::vector<double> getArray(const char *name);
+std::vector<double> getArrayCheck(const char *name);
 int fexists(const char* str);
 double sigm(double x);
 

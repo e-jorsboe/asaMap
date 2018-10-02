@@ -531,7 +531,7 @@ double logLike(double *start,double* pheno,Matrix<double> *design,double *p_sCg,
   return ret;
 }
 
-// emil more numerically stable - I think
+// emil more numerically stable - I think - seems not to be working 28-09-2018
 double logLike2(double *start,double* pheno,Matrix<double> *design,double *p_sCg,int regression){
 #if 0
   for(int i=0;i<p->start_len;i++)

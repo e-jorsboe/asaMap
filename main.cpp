@@ -21,7 +21,7 @@ std::vector<char*> readBim(char *str){
   
   int lens = 4096;
   char *buf = (char*) malloc(lens);
-
+  char *save;
   gzFile gz = Z_NULL;
   if(((gz=gzopen(fname,"rb")))==Z_NULL){
     fprintf(stderr,"Problem opening file: \'%s\'",fname);
@@ -30,9 +30,9 @@ std::vector<char*> readBim(char *str){
   std::vector<char*> ret;
   while(gzgets(gz,buf,lens)){
     
-    char *chr = strtok(buf,"\n \t");
-    strtok(NULL,"\t");strtok(NULL,"\n \t");
-    char *pos = strtok(NULL,"\n \t");
+    char *chr = strtok_r(buf,"\n \t",&save);
+    strtok_r(NULL,"\t",&save);strtok_r(NULL,"\n \t",&save);
+    char *pos = strtok_r(NULL,"\n \t",&save);
     char newItem[1024];
     snprintf(newItem,124,"%s\t%s\t",chr,pos);
     ret.push_back(strdup(newItem));
@@ -191,7 +191,6 @@ int main(int argc,char **argv){
   }  
 #endif
   
-
   FILE *outFile = fopen(outname, "w");
 
   // creates new char array for new name of logfile
@@ -211,31 +210,31 @@ int main(int argc,char **argv){
   
   plink *p = readplink(pname);  
   std::vector<char *> loci = readBim(pname);
-  Matrix<double> cov = getMatrix(covname);
+  Matrix<double> cov = getMatrixCheck(covname);
 
   if(0){
     print(&cov,stdout);
     return 0;
   }
   
-  std::vector<double> pheno = getArray(phename);
+  std::vector<double> pheno = getArrayCheck(phename);
   std::vector<double> adprop(pheno.size());
   if(qname!=NULL){
-    Matrix<double> Q = getMatrix(qname);
+    Matrix<double> Q = getMatrixCheck(qname);
     // I just read the first column of the .Q file into the adprop vector
     for(int i=0;i<Q.dx;i++){
       adprop[i]=Q.d[i][0];      
     }
   }  else if(adname!=NULL){
     // make so can give .Q file instead of just 1 column file...
-    adprop = getArray(adname);
+    adprop = getArrayCheck(adname);
   } else{
     fprintf(stderr,"ancprobs file or .Q file MUST be provided!\n");
     exit(1);
   }
 
-  Matrix<double> f = getMatrix(freqname);
-  std::vector<double> s = getArray(startname);
+  Matrix<double> f = getMatrixCheck(freqname);
+  std::vector<double> s = getArrayCheck(startname);
   
   // check files match in dimensions!!!!!!!
   assert(cov.mx==pheno.size());
