@@ -3,8 +3,8 @@ FLAGS=-O3
 LIBS= -lz
 
 ## whether to use EIGEN or not
-WITH_EIGEN=1
-EIGEN_PATH=/home/emil/software/eigen-eigen-5a0156e40feb
+WITH_EIGEN=
+EIGEN_PATH=
 
 ifdef WITH_EIGEN
 FLAGS += -I$(realpath $(EIGEN_PATH))
