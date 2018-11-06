@@ -11,6 +11,11 @@ Lines project:
 #include "readplink.h"
 #include "analysisFunction.h"
 #include "analysis.h"
+#include <iostream>
+
+#ifdef EIGEN
+#include <Eigen/Dense>
+#endif
 
 //stupid little function to read 1,3 column of a bim file
 std::vector<char*> readBim(char *str){
@@ -135,61 +140,8 @@ int main(int argc,char **argv){
     ++argv;
   }
   
-
-  /* emil I have changed how arguments are read, as this one did not check if arguments were not a char
-     meaning it only looked at first letter after "-", so could give "-model" instead of "-m"
-  
-  while ((n = getopt(argc, argv, "p:o:c:y:a:f:b:m:i:t:r:P:")) >= 0) {
-    fprintf(stderr,"arg: %s\n",optarg);
-    fprintf(stderr,"arg: %c\n",n);
-    
-    switch (n) {
-    case 'p': pname = strdup(optarg); break; 
-    case 'o': outname = strdup(optarg); break;
-    case 'c': covname = strdup(optarg); break;
-    case 'y': phename = strdup(optarg); break;
-    case 'a': adname = strdup(optarg); break;
-    case 'f': freqname = strdup(optarg); break;
-    case 'm': model = atoi(optarg); break;
-    case 'b': startname = strdup(optarg); break;
-    case 'i': mIter = atoi(optarg); break;
-    case 't': tol = atof(optarg); break;
-    case 'r': seed = atoi(optarg); break;
-    case 'P': nThreads = atoi(optarg); break;
-    default: {fprintf(stderr,"unknown arg: %s\n",optarg);exit(0);;}
-      //default: {fprintf(stderr,"unknown arg:\n");return 0;}
-    }
-  }
-
-  */
-
-#if 1
-  if(!outname||!pname||!covname||!phename||(!adname & !qname)||!freqname){
-    FILE *fp=stderr;
-    fprintf(fp, "\n");
-    fprintf(fp, "Usage: line  [options] \n");
-    fprintf(fp, "Options:\n");
-    fprintf(fp, "   -p \'%s\'\t\tplink prefix filename\n",pname);
-    fprintf(fp, "   -o \'%s\'\t\toutput filename\n",outname);
-    fprintf(fp, "   -c \'%s\'\t\tcovariance matrix filename\n",covname);
-    fprintf(fp, "   -y \'%s\'\t\tphenotypes\n",phename);
-    fprintf(fp, "   -a \'%s\'\t\tadmixproportions (for source pop1)\n",adname);
-    fprintf(fp, "   -Q \'%s\'\t\t.Q file from ADMIXTURE\n",qname);
-    fprintf(fp, "   -f \'%s\'\t\tallele frequencies\n",freqname);
-    fprintf(fp, "\n optional arguments:\n");
-    fprintf(fp, "   -m \'%d\'\t\tmodel 0=add 1=rec\n",model);
-    fprintf(fp, "   -l \'%d\'\t\tregression 0=linear 1=logistic\n",regression);
-    fprintf(fp, "   -b \'%s\'\t\tfile containing the start\n",startname);
-    fprintf(fp, "   -i \'%d\'\t\tmax number of iterations\n",mIter);
-    fprintf(fp, "   -r \'%d\'\t\trandom seed\n",seed);
-    fprintf(fp, "   -t \'%e\'\tfloat for breaking EM update\n",tol);
-    fprintf(fp, "   -P \'%d\'\t\tnumber of threads\n",nThreads);
-    fprintf(fp, "\n");
-    fprintf(stderr,"All files must be specified: -p -c -y -a -f -o\n");
-    //    print_info(stderr);
-    return 1;
-  }  
-#endif
+  clock_t t = clock();
+  time_t t2 = time(NULL);
   
   FILE *outFile = fopen(outname, "w");
 
@@ -211,11 +163,6 @@ int main(int argc,char **argv){
   plink *p = readplink(pname);  
   std::vector<char *> loci = readBim(pname);
   Matrix<double> cov = getMatrixCheck(covname);
-
-  if(0){
-    print(&cov,stdout);
-    return 0;
-  }
   
   std::vector<double> pheno = getArrayCheck(phename);
   std::vector<double> adprop(pheno.size());
@@ -264,26 +211,19 @@ int main(int argc,char **argv){
     fprintf(logFile,"Done reading file: '%s' containing nitems: %zu\n",qname,adprop.size());
   }
   fprintf(logFile,"Done reading file: '%s' containing nrows: %zu\tncols: %zu\n",freqname,f.mx,f.my);
-  // flush to disk - or force to write to disk
+
+#ifdef EIGEN
+#pragma message "Compiling with EIGEN" 
+#endif
+
+  // flush to disk - or force to write to disk 
   fflush(logFile);
   
   wrap(p,pheno,adprop,f,model,s,cov,mIter,tol,loci,nThreads,outFile,logFile,regression);
 
   //cleanup
   kill_plink(p);
-
-  /*
-  // emil changed reading in of arguments
-  free(pname);
-  free(outname);
-  free(covname);
-  free(phename);
-  free(adname);  
-  free(freqname);
-  free(startname);
-  */
-
-  fclose(logFile);
+  
   fclose(outFile);
   
   for(int i=0;i<cov.dx;i++){
@@ -299,5 +239,14 @@ int main(int argc,char **argv){
   for(uint i=0;i<loci.size();i++){
     free(loci[i]);
   }
+
+  fprintf(stderr, "\t[ALL done] cpu-time used =  %.2f sec\n", (float)(clock() - t) / CLOCKS_PER_SEC);
+  fprintf(stderr, "\t[ALL done] walltime used =  %.2f sec\n", (float)(time(NULL) - t2));
+
+  // print to log file
+  fprintf(logFile, "\t[ALL done] cpu-time used =  %.2f sec\n", (float)(clock() - t) / CLOCKS_PER_SEC);
+  fprintf(logFile, "\t[ALL done] walltime used =  %.2f sec\n", (float)(time(NULL) - t2));
+  fclose(logFile); 
+  
   return 0;
 }

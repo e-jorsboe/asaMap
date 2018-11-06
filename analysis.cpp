@@ -320,7 +320,6 @@ void wrap(const plink *plnk,const std::vector<double> &phe,const std::vector<dou
     fprintf(stderr,"\n"); fprintf(logFile,"\n");      
   }
   
-
   int analysedSites = 0;
   for(int y=0;y<plnk->y;y++){//loop over sites
 

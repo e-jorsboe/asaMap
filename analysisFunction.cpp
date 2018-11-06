@@ -15,6 +15,7 @@
 int validNumber(char* someString){
   int isNumber = 0;
   int hasPoint = 0;
+  int hase = 0;
    
   for(int i = 0; i<strlen(someString); i++){
     char s = someString[i];
@@ -22,6 +23,8 @@ int validNumber(char* someString){
     //if negative number
     if(i==0 and s=='-'){
       continue;
+    } else if(i==0 and s=='e'){
+      break;
     }
     
     if(s =='.'){
@@ -31,15 +34,31 @@ int validNumber(char* someString){
       }
       hasPoint = 1;
       isNumber = 1;
+      // if number with e in
+    } else if(s =='e'){
+      if(hase){
+	isNumber = 0;
+	break;
+      }
+      hase = 1;
+      isNumber = 1;      	
+    } else if(i>0 and s  == '-'){
+      if(someString[i-1] == 'e'){
+	continue;
+      }
     } else {
       isNumber = (s=='0' or s=='1' or s=='2' or s=='3' or s=='4' or s=='5' or s=='6' or s=='7' or s=='8' or s=='9');
     }
 
     // leaves loop if any not numbers
     if(isNumber==0){
+
+      fprintf(stderr,"k %s\n",someString);
       break;
     }
   }
+
+
   
   return(isNumber);
   
@@ -451,6 +470,7 @@ int whichMax(double *d,int len){
     return r;
 }
 
+/*
 
 void ludcmp(double **a, int *indx, double &d,int n)
 {
@@ -536,6 +556,8 @@ void lubksb(double **a, int *indx, double *b,int n)
   }
 }
 
+*/
+
 //usefull little function to split
 char *strpop(char **str,char split){
   char *tok=*str;
@@ -551,7 +573,7 @@ char *strpop(char **str,char split){
 }
 
 
-
+/*
 
 void svd_inverse(double mat[],int xLen, int yLen){
   if(xLen !=yLen){
@@ -598,6 +620,148 @@ void svd_inverse(double mat[],int xLen, int yLen){
     delete[] tm[i];
   delete[] tm;
 }
+
+*/
+
+// from ANGSD
+
+int ludcmp(double **a, int *indx, double &d,int n){
+  int imax = 0;
+  double big, dum, sum, temp;
+  double vv[n];
+  d=1;
+
+  for (int i=0; i<n; i++){
+    big=0;
+    for (int j=0; j<n; j++){
+      //fprintf(stderr,"%f\t",a[i][j]);
+      if ((temp=fabs(a[i][j])) > big) 
+	big=temp;
+    }
+    if(big==0){
+      fprintf(stderr,"singular matrix in ludcmp");
+      return(1);
+	//    assert(big!=0) ;
+
+    }
+    vv[i]=1/big;
+  }
+
+  for (int j=0; j<n; j++){
+    for (int i=0; i<j; i++){
+      sum = a[i][j];
+      for (int k=0; k<i; k++) 
+	sum -= a[i][k] * a[k][j];
+      a[i][j]=sum;
+    }
+    big=0;
+    for (int i=j; i<n; i++)	{
+      sum=a[i][j];
+      for (int k=0; k<j; k++)
+	sum -= a[i][k] * a[k][j];
+      a[i][j]=sum;
+      if ((dum=vv[i]*fabs(sum)) >= big) {
+	big = dum;
+	imax = i;
+      }
+    }
+    if (j != imax){
+      for (int k=0; k<n; k++){
+	dum=a[imax][k];
+	a[imax][k]=a[j][k];
+	a[j][k]=dum;
+      }
+      d = -d;
+      vv[imax]=vv[j];
+    }
+    indx[j]=imax;
+    if (a[j][j] == 0) 
+      a[j][j] = 1.0e-20;
+    if (j != n-1){
+      dum = 1/(a[j][j]);
+      for (int i=j+1; i<n; i++) 
+	a[i][j] *= dum;
+    }
+  }
+  return 0;
+}
+
+
+void lubksb(double **a, int *indx, double *b,int n){
+
+  int ii=0;
+  double sum;
+
+  for (int i=0; i<n; i++){
+    int ip=indx[i];
+    sum=b[ip];
+    b[ip]=b[i];
+    if (ii != 0)
+      for (int j=ii-1; j<i; j++) 
+	sum -= a[i][j]*b[j];
+    else if (sum != 0.0) 
+      ii=i+1;
+    b[i]=sum;
+  }
+  for (int i=n-1; i>=0; i--){
+    sum=b[i];
+    for (int j=i+1; j<n; j++) 
+      sum -= a[i][j]*b[j];
+    b[i]=sum/a[i][i];
+  }
+}
+
+
+
+int svd_inverse(double mat[],int xLen, int yLen){
+  if(xLen !=yLen){
+
+    fprintf(stderr,"non square matrix!\n");
+    exit(0);
+
+  }
+  double *col;
+  double y[xLen * yLen];
+  col = new double[xLen];
+  double **tm;
+  int *indx=new int[xLen];
+  double d;
+  tm = new double*[xLen];
+  for (int i=0; i < xLen; i++)
+    tm[i] = new double[xLen];
+
+  for(int i=0;i<xLen;i++)
+    for(int j=0;j<yLen;j++)
+      tm[i][j]=mat[j*xLen+i];
+
+  int singular=ludcmp(tm,indx,d,xLen);
+  if(singular)
+    return 1;
+  
+  for (int j=0; j<xLen; j++)
+    {
+      for (int i=0; i<xLen; i++)
+	col[i]=0;
+      col[j]=1;
+      lubksb(tm,indx,col,xLen);
+      for (int i=0; i<xLen; i++) 
+	y[j*xLen+i]=col[i];
+    }
+  
+  
+  for (int j=0; j<yLen; j++)
+    for (int i=0; i<xLen; i++)
+      mat[j*xLen+i]=y[j*xLen+i];
+
+  delete[] col;
+  delete[] indx;
+  for (int i=0; i < xLen; i++)
+    delete[] tm[i];
+  delete[] tm;
+  return 0;
+}
+
+
 
 
 

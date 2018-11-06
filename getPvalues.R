@@ -38,5 +38,7 @@ if(ncol(df)==16){
 } else{
   stop("Ouput file does not have expected dimensions!")
 }
+
+Ps<-Ps[ Ps[,"Chromo"]%in%1:22,]
   
 write.table(Ps,paste0(fileName1,".Pvalues"),col=T,row=F,qu=F)

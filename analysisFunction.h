@@ -32,7 +32,8 @@ void print(Matrix<double> *mat,FILE *file);
 void print(char *ary,size_t l,FILE *file,char*);
 void print(double *ary,size_t l,FILE *file,char*);
 void logrescale(double *ary,int len);
-void svd_inverse(double mat[],int xLen, int yLen);
+//void svd_inverse(double mat[],int xLen, int yLen);
+int svd_inverse(double mat[],int xLen, int yLen);
 std::vector<char*> getFilenames(const char * name,int nInd);
 char *strpop(char **str,char split);
 
