@@ -17,6 +17,7 @@ void kill_pars(pars *p,size_t l){
   delete [] p->p_sCg;
   delete [] p->start;
   delete [] p->start0;
+  delete [] p->SE;
   
   free(p->bufstr.s);free(p->tmpstr.s);
   delete p;  
@@ -76,8 +77,7 @@ void rstart2(double *ary,size_t l, const std::vector<double> &phe, double fMin, 
 
 }
 
-
-pars *init_pars(size_t l,size_t ncov,int model,int maxInter,double tole,std::vector<double> &start, const std::vector<double> &phe, int regression, FILE* logFile){
+pars *init_pars(size_t l,size_t ncov,int model,int maxInter,double tole,std::vector<double> &start, const std::vector<double> &phe, int regression, FILE* logFile, int estSE){
   pars *p=new pars;
   p->len=l;
   // also intercept (which is not specified)
@@ -94,34 +94,45 @@ pars *init_pars(size_t l,size_t ncov,int model,int maxInter,double tole,std::vec
   //p->design=initMatrix(4*l,ncov+2); 
   p->pheno = new double[4*l];
   p->p_sCg = new double[4*l];
+  p->weights = new double[4*l];
   p->bufstr.s=NULL;p->bufstr.l=p->bufstr.m=0;
   p->tmpstr.s=NULL;p->tmpstr.l=p->tmpstr.m=0;
 
   p->model = model;
   p->regression = regression;
-
+  p->estSE = estSE;
+  
   if(model==0){
     // for the add model where design matrix has B1, B2, A1, covs
-    // start has the same + sd(y) - so one longer than row in design matrix    
-    ksprintf(&p->bufstr,"Chromo\tPosition\tnInd\tf1\tf2\tllh(M0)\tllh(M1)\tllh(M2)\tllh(M3)\tllh(M4)\tllh(M5)\tb1(M1)\tb2(M1)\tb1(M2)\tb2(M3)\tb(M4)\n");
-
+    // start has the same + sd(y) - so one longer than row in design matrix
+    if(estSE){
+      ksprintf(&p->bufstr,"Chromo\tPosition\tnInd\tf1\tf2\tllh(M0)\tllh(M1)\tllh(M2)\tllh(M3)\tllh(M4)\tllh(M5)\tb1(M1)\tb2(M1)\tSE(b1(M1))\tSE(b2(M1))\tb1(M2)\tSE(b1(M2))\tb2(M3)\tSE(b2(M3))\tb(M4)\tSE(b(M4))\n");      
+    } else{
+      ksprintf(&p->bufstr,"Chromo\tPosition\tnInd\tf1\tf2\tllh(M0)\tllh(M1)\tllh(M2)\tllh(M3)\tllh(M4)\tllh(M5)\tb1(M1)\tb2(M1)\tb1(M2)\tb2(M3)\tb(M4)\n");
+    }
     // also has to have intercept
     p->design=initMatrix(4*l,ncov+3);
     
     // starting values for 3 coefs and covar + sd at the end (index: ncov+4)
     p->start = new double[ncov+4];
     p->start0 = new double[ncov+4];
+    p->SE = new double[ncov+4];
     
   } else{
     // for the add model where design matrix has R1, R2, Rm, delta1, delta2, covs (delta: rec for other allele - A)
-    // start has the same + sd(y) - so one longer than row in design matrix     
-    ksprintf(&p->bufstr,"Chromo\tPosition\tnInd\tf1\tf2\tllh(R0)\tllh(R1)\tllh(R2)\tllh(R3)\tllh(R4)\tllh(R5)\tllh(R6)\tllh(R7)\tb1(R1)\tb2(R1)\tbm(R1)\tb1(R2)\tb2m(R2)\tb1m(R3)\tb2(R3)\tb1(R4)\tb2(R5)\tb(R6)\n");
-
+    // start has the same + sd(y) - so one longer than row in design matrix
+    if(estSE){
+       ksprintf(&p->bufstr,"Chromo\tPosition\tnInd\tf1\tf2\tllh(R0)\tllh(R1)\tllh(R2)\tllh(R3)\tllh(R4)\tllh(R5)\tllh(R6)\tllh(R7)\tb1(R1)\tb2(R1)\tbm(R1)\tSE(b1(R1))\tSE(b2(R1))\tSE(bm(R1))\tb1(R2)\tb2m(R2)\tSE(b1(R2))\tSE(b2m(R2))\tb1m(R3)\tb2(R3)\tSE(b1m(R3))\tSE(b2(R3))\tb1(R4)\tSE(b1(R4))\tb2(R5)\tSE(b2(R5))\tb(R6)\tSE(b(R6))\n");
+    } else{
+      ksprintf(&p->bufstr,"Chromo\tPosition\tnInd\tf1\tf2\tllh(R0)\tllh(R1)\tllh(R2)\tllh(R3)\tllh(R4)\tllh(R5)\tllh(R6)\tllh(R7)\tb1(R1)\tb2(R1)\tbm(R1)\tb1(R2)\tb2m(R2)\tb1m(R3)\tb2(R3)\tb1(R4)\tb2(R5)\tb(R6)\n");
+    }
+       
     // also has to have intercept
     p->design=initMatrix(4*l,ncov+5);    
     // this one has one starting guess for 5 coefs and covar + sd at the end, index ncov+6
     p->start = new double[ncov+6];
     p->start0 = new double[ncov+6];
+    p->SE = new double[ncov+6];
     
   }
    
@@ -239,38 +250,15 @@ void set_pars(pars*p, char *g,const std::vector<double> &phe, const std::vector<
   // add extra covariate of intercept
   p->covs->dy=cov.dy+1;
   p->mafs = freq;
-
-  /* EMIL - IS THIS NEEDED? SCALING COVARIATES
   
-  //try and protect from getting a too large (X^T*W*X) matrix, that is to be inverted
+  //might try and protect from getting a too large (X^T*W*X) matrix, that is to be inverted
   //by dividing the start value for the covariate with too high mean with 1/mean(covariate)
-  double sum = 0;
-  double max = 0;
-  for(int j=0;j<p->covs->dy;j++){
-    sum = 0; max = 0;
-    for(int i=0;i<p->len;i++){
-      sum += p->covs->d[i][j];
-      if(fabs(p->covs->d[i][j])>max){
-	max = fabs(p->covs->d[i][j]);
-      }
-    }
-    double mean = sum / p->len;
-    // 4 is pretty arbitrary however geno columns are at most 2
-    if(fabs(mean) > 4){
-      for(int i=0;i<p->len;i++){
-	// scales downs covariate to avoid numerical over/underflow
-	// will bring it to interval between -2 and 2
-	p->covs->d[i][j] = p->covs->d[i][j]/(max*0.5);
-      }
-    }
-  }             
 
-  EMIL end */  
-  
   for(int i=0;i<p->len;i++){
     for(int j=0;j<4;j++){
       p->pheno[i*4+j] = p->ys[i];
       p->p_sCg[i*4+j] = NAN;
+      p->weights[i*4+j] = NAN;
     }
 
   }
@@ -287,7 +275,7 @@ void set_pars(pars*p, char *g,const std::vector<double> &phe, const std::vector<
 }
 
 
-void wrap(const plink *plnk,const std::vector<double> &phe,const std::vector<double> &ad,Matrix<double> &freq,int model,std::vector<double> start,Matrix<double> &cov,int maxIter,double tol,std::vector<char*> &loci,int nThreads,FILE* outFile, FILE* logFile, int regression){
+void wrap(const plink *plnk,const std::vector<double> &phe,const std::vector<double> &ad,Matrix<double> &freq,int model,std::vector<double> start,Matrix<double> &cov,int maxIter,double tol,std::vector<char*> &loci,int nThreads,FILE* outFile, FILE* logFile, int regression, int estSE){
   //fprintf(stderr,"\t-> plinkdim: x->%lu y->%lu\n",plnk->x,plnk->y);
   //return ;
   char **d = new char*[plnk->y];//transposed of plink->d. Not sure what is best, if we filterout nonmissing anyway.
@@ -297,7 +285,7 @@ void wrap(const plink *plnk,const std::vector<double> &phe,const std::vector<dou
       d[i][j]=plnk->d[j][i];
   }
   //we prep for threading. By using encapsulating all data need for a site in struct called pars
-  pars *p=init_pars(plnk->x,cov.dy,model,maxIter,tol,start,phe,regression,logFile);
+  pars *p=init_pars(plnk->x,cov.dy,model,maxIter,tol,start,phe,regression,logFile,estSE);
 
   // check that pheno and covariates are OK
   check_pars(p, phe, cov);
@@ -353,8 +341,7 @@ void wrap(const plink *plnk,const std::vector<double> &phe,const std::vector<dou
       fprintf(stderr,"skipping site[%d] due to categories filter\n",y);
       continue;
     }
- 
-    
+     
     //   if(freq.d[y][0]>0.999||freq.d[y][0]<0.001){
     //  fprintf(stderr,"skipping site[%d] due to maf filter\n",y);
     //  continue;

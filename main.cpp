@@ -66,8 +66,8 @@ void print_info(FILE *fp){
   fprintf(fp, "   -i <UINTEGER>       maximum iterations\n");
   fprintf(fp, "   -t <FLOAT>          tolerance for breaking EM\n");
   fprintf(fp, "   -r <FLOAT>          seed for rand\n");
-  fprintf(fp, "   -P <INT>            number of threads\n");
-
+  //fprintf(fp, "   -P <INT>            number of threads\n");
+  fprintf(fp, "   -e <INT>            estimate standard error of coefficients (0: no, 1: yes)\n");
   fprintf(fp, "\n");
 }
 
@@ -100,6 +100,7 @@ int main(int argc,char **argv){
   //emil - I will give random seed:
   int seed = time(NULL);
   int nThreads = 1;
+  int estSE = 0;
 
   argv++;
   while(*argv){
@@ -131,6 +132,7 @@ int main(int argc,char **argv){
     else if(strcmp(*argv,"-r")==0) seed=atoi(*++argv); 
     // number of threads
     else if(strcmp(*argv,"-P")==0) nThreads=atoi(*++argv);
+    else if(strcmp(*argv,"-e")==0) estSE=atoi(*++argv);
     else{
       fprintf(stderr,"Unknown arg:%s\n",*argv);
       FILE *fp=stderr;
@@ -195,7 +197,9 @@ int main(int argc,char **argv){
   assert(model==0 || model==1);
   // linear or logisitc regression
   assert(regression==0 || regression==1);
-
+  // no standard error or standard error
+  assert(estSE==0 || estSE==1);
+  
   fprintf(logFile,"Command had following options :\t -p %s -o %s ",pname,outname);
   fprintf(logFile,"-c %s -y %s -Q %s -a %s -f %s -i %i -t %f -m %i -l %i -r %i ",covname,phename,qname,adname,freqname,mIter,tol,model,regression,seed);
   fprintf(logFile,"-P %i -b %s\n",nThreads,startname);
@@ -219,7 +223,7 @@ int main(int argc,char **argv){
   // flush to disk - or force to write to disk 
   fflush(logFile);
   
-  wrap(p,pheno,adprop,f,model,s,cov,mIter,tol,loci,nThreads,outFile,logFile,regression);
+  wrap(p,pheno,adprop,f,model,s,cov,mIter,tol,loci,nThreads,outFile,logFile,regression,estSE);
 
   //cleanup
   kill_plink(p);

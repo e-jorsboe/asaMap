@@ -5,7 +5,7 @@
 #include "readplink.h"
 #include "kstring.h"
 
-void wrap(const plink *p,const std::vector<double> &phe,const std::vector<double> &ad,Matrix<double> &freq,int model,std::vector<double> start,Matrix<double> &cov,int,double,std::vector<char*> &loci,int nThreads,FILE* outFile, FILE* logFile, int regression);
+void wrap(const plink *p,const std::vector<double> &phe,const std::vector<double> &ad,Matrix<double> &freq,int model,std::vector<double> start,Matrix<double> &cov,int,double,std::vector<char*> &loci,int nThreads,FILE* outFile, FILE* logFile, int regression, int estSE);
 
 /*
   Below is the pars.
@@ -27,9 +27,11 @@ int len; //length
   double *start0;//start. Initialized as long as len. Just to be sure.
   double *start;//start. Initialized as long as len. Just to be sure.
   double *mafs;//freqs <- this is never allocated but points to the Matrix<double> freq;
+  double *SE;//has standard error of estimates
   int model;// 0=add 1=
   int quant;
   int regression;
+  int estSE;
   int maxIter;
   double tol;
   int doOptim;
@@ -40,6 +42,7 @@ int len; //length
   //tmp structs to avoid overusing stack
   double *pheno;
   double *p_sCg;
+  double *weights;
   Matrix<double> *design;
   Matrix<double> *ysCgs;
   kstring_t bufstr;
