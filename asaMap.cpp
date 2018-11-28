@@ -240,95 +240,96 @@ void getFit2(double* start, double* Y, double** covMatrix, double* weights, int 
 
 void getFitBin(double* start, double* Y, double** covMatrix, double* weights, int nInd4, int nEnv, int df){
 
-   /*
-     Fits logistic model using iterativt weighted least squares (IWLS)
-     linear regression. Fits a logistic model with weights
-     Y is the binary responce (nInd)
-     covMatrix is the design matrix [nInd][nEnv]
-     weights is the weights (nInd*nEnv)
-     int df is the number of degrees of freedom
-     nInd is the number of individuals
-     nEnv is the number of predictors (including the intercept)
-   */
+  double tol=1e-04;
+  /*
+    Fits logistic model using iterativt weighted least squares (IWLS)
+    linear regression. Fits a logistic model with weights
+    Y is the binary responce (nInd)
+    covMatrix is the design matrix [nInd][nEnv]
+    weights is the weights (nInd*nEnv)
+    int df is the number of degrees of freedom
+    nInd is the number of individuals
+    nEnv is the number of predictors (including the intercept)
+  */
   
-   int nIndW=0;
-   char nonZeroWeight[nInd4];
-   memset(nonZeroWeight,0,nInd4);
-   if(weights==NULL){
-     nIndW=nInd4;     
-     memset(nonZeroWeight,1,nInd4);
-   } else{
-     for(int i=0;i<nInd4;i++){
-       if(weights[i]>0){
-	 // counts non zero weights!
-	 nonZeroWeight[i]=1;
-	 nIndW++;
-       }
-     }
-   }
-   
-   double yw[nIndW]; //<-stripped phenos scaled by stripped weights
-   double ww[nIndW]; //<-stripped weights
-   double xw[nIndW*nEnv]; //<-stripped designs
+  int nIndW=0;
+  char nonZeroWeight[nInd4];
+  memset(nonZeroWeight,0,nInd4);
+  if(weights==NULL){
+    nIndW=nInd4;     
+    memset(nonZeroWeight,1,nInd4);
+  } else{
+    for(int i=0;i<nInd4;i++){
+      if(weights[i]>0){
+	// counts non zero weights!
+	nonZeroWeight[i]=1;
+	nIndW++;
+      }
+    }
+  }
+  
+  double yw[nIndW]; //<-stripped phenos scaled by stripped weights
+  double ww[nIndW]; //<-stripped weights
+  double xw[nIndW*nEnv]; //<-stripped designs
+  
+  int cnt=0;
+  for(int i=0;i<nInd4;i++){
+    if(nonZeroWeight[i]){
+      yw[cnt] = Y[i];
+      if(weights==NULL){
+	ww[cnt] = 1;
+      } else{
+	ww[cnt] = weights[i];
+      }
+      for(int j=0;j<nEnv;j++){
+	xw[cnt*nEnv+j] = covMatrix[i][j];
+      }
+      cnt++;
+    }
+  }
+  
+  double mustart[nIndW];
+  // if weights do not exists, have all weights be 1     
+  for(int i=0;i<nIndW;i++){
+    mustart[i] = (ww[i]*yw[i] + 0.5)/(ww[i] + 1);
+  }
+  
+  double eta[nIndW];
+  for(int i=0;i<nIndW;i++){
+    //link
+    eta[i] = log(mustart[i]/(1-mustart[i]));
+  }
+  
+  double mu[nIndW];
+  for(int i=0;i<nIndW;i++){
+    //linkinv
+    mu[i] = 1 / (1 + exp(-eta[i]));
+  }
+  
+  double mu0[nIndW];
+  double muetaval[nIndW];
+  double z[nIndW];
+  double w[nIndW];  
+  double XtX[nEnv*nEnv] = {0};
+  double Xt_y[nEnv] = {0};
+  double invXtX_Xt_y[nEnv] = {0}; 
 
-   int cnt=0;
-   for(int i=0;i<nInd4;i++){
-     if(nonZeroWeight[i]){
-       yw[cnt] = Y[i];
-       if(weights==NULL){
-	 ww[cnt] = 1;
-       } else{
-	 ww[cnt] = weights[i];
-       }
-       for(int j=0;j<nEnv;j++){
-	 xw[cnt*nEnv+j] = covMatrix[i][j];
-       }
-       cnt++;
-     }
-   }
-   
-   double mustart[nIndW];
-   // if weights do not exists, have all weights be 1     
-   for(int i=0;i<nIndW;i++){
-     mustart[i] = (ww[i]*yw[i] + 0.5)/(ww[i] + 1);
-   }
-    
-   double eta[nIndW];
-   for(int i=0;i<nIndW;i++){
-     //link
-     eta[i] = log(mustart[i]/(1-mustart[i]));
-   }
-   
-   double mu[nIndW];
-   for(int i=0;i<nIndW;i++){
-     //linkinv
-     mu[i] = 1 / (1 + exp(-eta[i]));
-   }
-
-   double mu0[nIndW];
-   double muetaval[nIndW];
-   double z[nIndW];
-   double w[nIndW];  
-   double XtX[nEnv*nEnv] = {0};
-   double Xt_y[nEnv] = {0};
-   double invXtX_Xt_y[nEnv] = {0}; 
-   int iter = 0;
-   
-   // we run this 20 times...
+  
+  // we run this 20 times...
    for(int t=0;t<20;t++){
      
      for(int i=0;i<nIndW;i++){
        // because mu is same as linkinv(eta)
        muetaval[i] = mu[i]*(1-mu[i]); 
      }
-
+     
      // add nonZeriWeight here!!
      for(int i=0;i<nIndW;i++){
        // can be calculated together as do not depent on eachother
        z[i] = eta[i]+(yw[i]-mu[i])/muetaval[i];       
        w[i] = sqrt( (ww[i]*(muetaval[i]*muetaval[i])) / (mu[i]*(1-mu[i])) );       
      }
-      
+     
      // this is doing the matrix product of (X)^T*W*X
      // takes all columns of second matrix and puts on first column of first matrix - stores at first 0 to nEnv-1 values of XtX
      // takes all columns of second matrix and puts on second column of first matrix - stores at nEnv to 2*nEnv-1 values of XtX
@@ -341,7 +342,7 @@ void getFitBin(double* start, double* Y, double** covMatrix, double* weights, in
 	 }
        }
      }     
-
+     
 #if 0
      //print before inversion
      fprintf(stderr,"BEFORE:\n");
@@ -351,9 +352,9 @@ void getFitBin(double* start, double* Y, double** covMatrix, double* weights, in
        fprintf(stderr,"\n");
      } 
 #endif
-
+     
      svd_inverse(XtX, nEnv, nEnv);     
-    
+     
 #if 0
      //print after inversion
      fprintf(stderr,"AFTER:\n");
@@ -363,7 +364,7 @@ void getFitBin(double* start, double* Y, double** covMatrix, double* weights, in
        fprintf(stderr,"\n");
      } 
 #endif 
-    
+     
      // this is doing the matrix product of (X)^T*W*Y
      // takes first column of first matrix and puts on first and only column of second matrix
      // takes second column of first matrix and puts on first and only column of second matrix
@@ -372,7 +373,7 @@ void getFitBin(double* start, double* Y, double** covMatrix, double* weights, in
 	 Xt_y[x] += xw[i*nEnv+x]*w[i]*z[i]*w[i];
        }       
      }
-
+     
      // calculating coefficients so inv((X)^T*W*X)*((X)^T*W*Y)
      // the coefficients are stored in start
      for(int x=0;x<nEnv;x++){
@@ -381,7 +382,7 @@ void getFitBin(double* start, double* Y, double** covMatrix, double* weights, in
        }
        start[x]=invXtX_Xt_y[x];
      }
-      
+     
      // eta
      for(int i=0;i<nIndW;i++){
        // clear values of eta
@@ -400,8 +401,8 @@ void getFitBin(double* start, double* Y, double** covMatrix, double* weights, in
        // mu0 has values of previous iteration
        mu0[i] = 1 / (1 + exp(-eta[i]));    
      }
-
-     if(diff<1e-4 & iter>0){
+     
+     if(diff<1e-4 & t>0){
        break;
      }
      
@@ -419,79 +420,78 @@ void getFitBin(double* start, double* Y, double** covMatrix, double* weights, in
 
 void getFitBin2(double* start, double* Y, double** covMatrix, double* weights, int nInd4, int nEnv, int df){
 
-   /*
-     Fits logistic model using iterativt weighted least squares (IWLS)
-     linear regression. Fits a logistic model with weights
-     Y is the binary responce (nInd)
-     covMatrix is the design matrix [nInd][nEnv]
-     weights is the weights (nInd*nEnv)
-     int df is the number of degrees of freedom
-     nInd is the number of individuals
-     nEnv is the number of predictors (including the intercept)
-   */
+  double tol=1e-04;
+  /*
+    Fits logistic model using iterativt weighted least squares (IWLS)
+    linear regression. Fits a logistic model with weights
+    Y is the binary responce (nInd)
+    covMatrix is the design matrix [nInd][nEnv]
+    weights is the weights (nInd*nEnv)
+    int df is the number of degrees of freedom
+    nInd is the number of individuals
+    nEnv is the number of predictors (including the intercept)
+  */
   
-   int nIndW=0;
-   char nonZeroWeight[nInd4];
-   memset(nonZeroWeight,0,nInd4);
-   if(weights==NULL){
-     nIndW=nInd4;     
-     memset(nonZeroWeight,1,nInd4);
-   } else{
-     for(int i=0;i<nInd4;i++){
-       if(weights[i]>0){
-	 // counts non zero weights!
-	 nonZeroWeight[i]=1;
-	 nIndW++;
-       }
-     }
+  int nIndW=0;
+  char nonZeroWeight[nInd4];
+  memset(nonZeroWeight,0,nInd4);
+  if(weights==NULL){
+    nIndW=nInd4;     
+    memset(nonZeroWeight,1,nInd4);
+  } else{
+    for(int i=0;i<nInd4;i++){
+      if(weights[i]>0){
+	// counts non zero weights!
+	nonZeroWeight[i]=1;
+	nIndW++;
+      }
+    }
+  }
+  
+  double yw[nIndW]; //<-stripped phenos scaled by stripped weights
+  double ww[nIndW]; //<-stripped weights
+  double xw[nIndW*nEnv]; //<-stripped designs
+  
+  int cnt=0;
+  for(int i=0;i<nInd4;i++){
+    if(nonZeroWeight[i]){
+      yw[cnt] = Y[i];
+      if(weights==NULL){
+	ww[cnt] = 1;
+      } else{
+	ww[cnt] = weights[i];
+      }
+      for(int j=0;j<nEnv;j++){
+	xw[cnt*nEnv+j] = covMatrix[i][j];
+      }
+      cnt++;
+    }
+  }
+  
+  double mustart[nIndW];
+  // if weights do not exists, have all weights be 1     
+  for(int i=0;i<nIndW;i++){
+    mustart[i] = (ww[i]*yw[i] + 0.5)/(ww[i] + 1);
+  }
+  
+  double eta[nIndW];
+  for(int i=0;i<nIndW;i++){
+    //link
+    eta[i] = log(mustart[i]/(1-mustart[i]));
+  }
+  
+  double mu[nIndW];
+  for(int i=0;i<nIndW;i++){
+    //linkinv
+    mu[i] = 1 / (1 + exp(-eta[i]));
    }
-   
-   double yw[nIndW]; //<-stripped phenos scaled by stripped weights
-   double ww[nIndW]; //<-stripped weights
-   double xw[nIndW*nEnv]; //<-stripped designs
-
-   int cnt=0;
-   for(int i=0;i<nInd4;i++){
-     if(nonZeroWeight[i]){
-       yw[cnt] = Y[i];
-       if(weights==NULL){
-	 ww[cnt] = 1;
-       } else{
-	 ww[cnt] = weights[i];
-       }
-       for(int j=0;j<nEnv;j++){
-	 xw[cnt*nEnv+j] = covMatrix[i][j];
-       }
-       cnt++;
-     }
-   }
-   
-   double mustart[nIndW];
-   // if weights do not exists, have all weights be 1     
-   for(int i=0;i<nIndW;i++){
-     mustart[i] = (ww[i]*yw[i] + 0.5)/(ww[i] + 1);
-   }
-    
-   double eta[nIndW];
-   for(int i=0;i<nIndW;i++){
-     //link
-     eta[i] = log(mustart[i]/(1-mustart[i]));
-   }
-   
-   double mu[nIndW];
-   for(int i=0;i<nIndW;i++){
-     //linkinv
-     mu[i] = 1 / (1 + exp(-eta[i]));
-   }
-
+  
    double mu0[nIndW];
    double muetaval[nIndW];
    double z[nIndW];
    double w[nIndW];
    double zw2[nIndW];
    double xw2[nIndW*nEnv];
-
-   int iter = 0;
    
    // we run this 20 times...
    for(int t=0;t<20;t++){
@@ -545,7 +545,7 @@ void getFitBin2(double* start, double* Y, double** covMatrix, double* weights, i
        mu0[i] = 1 / (1 + exp(-eta[i]));    
      }
 
-     if(diff<1e-4 & iter>0){
+     if(diff<tol & t>0){
        break;
      }
              
