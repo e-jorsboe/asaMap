@@ -18,7 +18,7 @@ void wrap(const plink *p,const std::vector<double> &phe,const std::vector<double
 */
 
 typedef struct{
-int len; //length
+  int len; //length
   Matrix<double> *covs;//covs is a design matrix.
   int ncov; //number of covariates <ncov_max
   char *gs;//genotypes gs \in {0,1,2,3},counts of allele2, 3=NA/missing
@@ -38,6 +38,7 @@ int len; //length
   int retPrior;
   int doLean;
   double *res;//should contain the per site results. Takes from Line this is a double[47]
+  int index; //which site it is
   
   //tmp structs to avoid overusing stack
   double *pheno;

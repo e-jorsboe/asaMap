@@ -10,6 +10,7 @@
 
 #define LENS 4096
 
+#define LOWER_BOUND 1e-20
 
 // checks if string is number
 int validNumber(char* someString){
@@ -57,14 +58,10 @@ int validNumber(char* someString){
       break;
     }
   }
-
-
   
   return(isNumber);
   
 }
-
-
 
 
 Matrix<double> *initMatrix(size_t x,size_t y){
@@ -310,7 +307,6 @@ void deleteMatrix(Matrix<double> mat){
   mat.d =NULL;
 }
 
-
 void print(Matrix<double> *mat,FILE *file){
   fprintf(stderr,"Printing mat:%p with dim=(%lu,%lu)\n",mat->d,mat->dx,mat->dy);
   for(int xi=0;xi<mat->dx;xi++){
@@ -470,93 +466,7 @@ int whichMax(double *d,int len){
     return r;
 }
 
-/*
 
-void ludcmp(double **a, int *indx, double &d,int n)
-{
-  int imax = 0;
-  double big, dum, sum, temp;
-  double vv[n];
-  d=1;
-
-  for (int i=0; i<n; i++){
-    big=0;
-    for (int j=0; j<n; j++){
-      //fprintf(stderr,"%f\t",a[i][j]);
-      if ((temp=fabs(a[i][j])) > big) 
-	big=temp;
-    }
-    
-    assert(big!=0) ;
-      //      fprintf(stderr,"singular matrix in ludcmp");
-    vv[i]=1/big;
-  }
-  
-  for (int j=0; j<n; j++){
-    for (int i=0; i<j; i++){
-      sum = a[i][j];
-      for (int k=0; k<i; k++) 
-	sum -= a[i][k] * a[k][j];
-      a[i][j]=sum;
-    }
-    big=0;
-    for (int i=j; i<n; i++)	{
-      sum=a[i][j];
-      for (int k=0; k<j; k++)
-	sum -= a[i][k] * a[k][j];
-      a[i][j]=sum;
-      if ((dum=vv[i]*fabs(sum)) >= big) {
-	big = dum;
-	imax = i;
-      }
-    }
-    if (j != imax){
-      for (int k=0; k<n; k++){
-	dum=a[imax][k];
-	a[imax][k]=a[j][k];
-	a[j][k]=dum;
-      }
-      d = -d;
-      vv[imax]=vv[j];
-    }
-    indx[j]=imax;
-    if (a[j][j] == 0) 
-      a[j][j] = 1.0e-20;
-    if (j != n-1){
-      dum = 1/(a[j][j]);
-      for (int i=j+1; i<n; i++) 
-	a[i][j] *= dum;
-    }
-  }
-}
-
-
-void lubksb(double **a, int *indx, double *b,int n)
-{
-
-  int ii=0;
-  double sum;
-
-  for (int i=0; i<n; i++){
-    int ip=indx[i];
-    sum=b[ip];
-    b[ip]=b[i];
-    if (ii != 0)
-      for (int j=ii-1; j<i; j++) 
-	sum -= a[i][j]*b[j];
-    else if (sum != 0.0) 
-      ii=i+1;
-    b[i]=sum;
-  }
-  for (int i=n-1; i>=0; i--){
-    sum=b[i];
-    for (int j=i+1; j<n; j++) 
-      sum -= a[i][j]*b[j];
-    b[i]=sum/a[i][i];
-  }
-}
-
-*/
 
 //usefull little function to split
 char *strpop(char **str,char split){
@@ -573,58 +483,8 @@ char *strpop(char **str,char split){
 }
 
 
-/*
 
-void svd_inverse(double mat[],int xLen, int yLen){
-  if(xLen !=yLen){
-
-    fprintf(stderr,"non square matrix [%s]\t[%s]\n",__FILE__,__FUNCTION__);
-    exit(0);
-
-  }
-  double *col;
-  double y[xLen * yLen];
-  col = new double[xLen];
-  double **tm;
-  int *indx=new int[xLen];
-  double d;
-  tm = new double*[xLen];
-  for (int i=0; i < xLen; i++)
-    tm[i] = new double[xLen];
-
-  for(int i=0;i<xLen;i++)
-    for(int j=0;j<yLen;j++)
-      tm[i][j]=mat[j*xLen+i];
-
-
-  ludcmp(tm,indx,d,xLen);
-
-  for (int j=0; j<xLen; j++)
-    {
-      for (int i=0; i<xLen; i++)
-	col[i]=0;
-      col[j]=1;
-      lubksb(tm,indx,col,xLen);
-      for (int i=0; i<xLen; i++) 
-	y[j*xLen+i]=col[i];
-    }
-  
-  
-  for (int j=0; j<yLen; j++)
-    for (int i=0; i<xLen; i++)
-      mat[j*xLen+i]=y[j*xLen+i];
-
-  delete[] col;
-  delete[] indx;
-  for (int i=0; i < xLen; i++)
-    delete[] tm[i];
-  delete[] tm;
-}
-
-*/
-
-// from ANGSD
-
+// from ANGSD source code
 int ludcmp(double **a, int *indx, double &d,int n){
   int imax = 0;
   double big, dum, sum, temp;
@@ -639,7 +499,7 @@ int ludcmp(double **a, int *indx, double &d,int n){
 	big=temp;
     }
     if(big==0){
-      fprintf(stderr,"singular matrix in ludcmp");
+      fprintf(stderr,"singular matrix in ludcmp\n");
       return(1);
 	//    assert(big!=0) ;
 
@@ -686,7 +546,7 @@ int ludcmp(double **a, int *indx, double &d,int n){
   return 0;
 }
 
-
+// from ANGSD source code
 void lubksb(double **a, int *indx, double *b,int n){
 
   int ii=0;
@@ -712,12 +572,13 @@ void lubksb(double **a, int *indx, double *b,int n){
 }
 
 
-
+// from ANGSD source code
 int svd_inverse(double mat[],int xLen, int yLen){
   if(xLen !=yLen){
 
     fprintf(stderr,"non square matrix!\n");
-    exit(0);
+    return 1;
+    //exit(0);
 
   }
   double *col;
@@ -885,4 +746,69 @@ double sum(double *a,size_t b,int doLog){
     else
       r +=log(a[i]);
   return r;
+}
+
+
+double dnorm(double x,double mean,double sd){
+    
+  double fac = 1.0/(sd*sqrt(2.0*M_PI));
+  double val = exp(-(((x-mean)*(x-mean))/(2*sd*sd)));
+  
+  // if val is 0 because exp(-(x-mean)*(x-mean)) is due to underflow, returns low value
+  if(val<LOWER_BOUND){
+    return(LOWER_BOUND);
+  } else{
+    return fac*val;
+  }
+
+}
+
+double logdnorm(double x, double mean, double sd){    
+  double fac = log(1.0/(sd*sqrt(2.0*M_PI)));
+  //log of exp(-(((x-mean)*(x-mean))/(2*sd*sd))), exp causes overflow
+  double val = -(((x-mean)*(x-mean))/(2*sd*sd));
+  return (fac+val);
+}
+
+
+// from /home/albrecht/github/angsd/fet.c
+// getting log of binomial
+// log\binom{n}{k}
+double lbinom(int n, int k){
+  if (k == 0 || n == k) return 0;
+  return lgamma(n+1) - lgamma(k+1) - lgamma(n-k+1);
+}
+
+
+// from /home/albrecht/github/angsd/misc/contamination2.cpp (called ldbinom in there)
+double logdbinom(int k, int n,double p){
+  return lbinom(n,k)+k*log(p)+(n-k)*log(1-p);
+}
+
+
+double dbinom(int k, int n,double p){
+  return exp(lbinom(n,k)+k*log(p)+(n-k)*log(1-p));
+}
+
+
+double logbernoulli(int k, double p){
+  // if p is 0 or 1, cannot do log
+  // however this because of over/underlow and p i just very close 0 or 1
+  if(p>1-LOWER_BOUND){
+    p = 1-LOWER_BOUND;
+  } else if(p<LOWER_BOUND){
+    p = LOWER_BOUND;
+  } 
+  return( log(pow(p,k)*pow(1-p,1-k)) );
+}
+
+double bernoulli(int k, double p){
+  // if p is 0 or 1, cannot do log
+  // however this because of over/underlow and p i just very close 0 or 1
+  if(p>1-LOWER_BOUND){
+    p = 1-LOWER_BOUND;
+  } else if(p<LOWER_BOUND){
+    p = LOWER_BOUND;
+  } 
+  return( pow(p,k)*pow(1-p,1-k) );
 }

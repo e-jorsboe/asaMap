@@ -4,6 +4,7 @@
 #include "asaMap.h"
 #include "analysis.h"
 #include "readplink.h"
+#include "analysisFunction.h"
 #include <cstring>
 #include <cfloat>
 #include "kstring.h"
@@ -18,7 +19,7 @@ double lower_bound = 1e-20;
 
 // fits a linear model using weighted least squares, 4 observations per individual -
 // up to 4 possible states, when geno is known
-void getFit(double* start, double* Y, double** covMatrix, double* weights, int nInd4, int nEnv, int df){
+int getFit(double* start, double* Y, double** covMatrix, double* weights, int nInd4, int nEnv, int df){
 
    /*
      linear regression. Fits a linear model with weights
@@ -31,11 +32,10 @@ void getFit(double* start, double* Y, double** covMatrix, double* weights, int n
    */
   
    int nIndW=0;
-   char nonZeroWeight[nInd4];
-   memset(nonZeroWeight,0,nInd4);
+   std::vector<double> nonZeroWeight(nInd4);
    if(weights==NULL){
      nIndW=nInd4;
-     memset(nonZeroWeight,1,nInd4);
+     nonZeroWeight.assign(nInd4,1);
    } else{
      for(int i=0;i<nInd4;i++){
        // checks that weights are greater than 0, and keeps those individuals
@@ -45,10 +45,10 @@ void getFit(double* start, double* Y, double** covMatrix, double* weights, int n
        }
      }
    }
- 
-   double yw[nIndW]; //<-stripped phenos scaled by stripped weights
-   double xw[nIndW*nEnv]; //<-stripped designs
-   
+
+   std::vector<double> yw(nIndW); //<-stripped phenos scaled by stripped weights
+   std::vector<double> xw(nIndW*nEnv); //<-stripped designs
+
    int cnt=0;
    for(int i=0;i<nInd4;i++){
      if(nonZeroWeight[i]){
@@ -87,8 +87,11 @@ void getFit(double* start, double* Y, double** covMatrix, double* weights, int n
 #endif
 
    // doing inv((X)^T*W*X)
-   svd_inverse(XtX, nEnv, nEnv);
-
+   int singular = svd_inverse(XtX, nEnv, nEnv);
+   if(singular){
+     return(-9);
+   }
+   
 #if 0
    //print after inversion
    fprintf(stderr,"AFTER:\n");
@@ -98,14 +101,10 @@ void getFit(double* start, double* Y, double** covMatrix, double* weights, int n
      fprintf(stderr,"\n");
    } 
 #endif
-       
-   double Xt_y[nEnv];
-   double invXtX_Xt_y[nEnv]; 
-   for(int i=0;i<nEnv;i++)
-     Xt_y[i]=0;
-   for(int i=0;i<nEnv;i++)
-     invXtX_Xt_y[i]=0;
 
+   std::vector<double> Xt_y(nEnv);
+   std::vector<double> invXtX_Xt_y(nEnv);
+      
    // doing (X)^T*W*Y
    for(int x=0;x<nEnv;x++)
      for(int i=0;i<nIndW;i++)
@@ -119,11 +118,9 @@ void getFit(double* start, double* Y, double** covMatrix, double* weights, int n
    for(int x=0;x<nEnv;x++){
      start[x]=invXtX_Xt_y[x];
    }   
-  
-   double yTilde[nInd4];
-   for(int i=0;i<nInd4;i++)
-     yTilde[i] = 0;
 
+   std::vector<double> yTilde(nInd4);
+     
    for(int i=0;i<nInd4;i++)
      for(int x=0;x<nEnv;x++)
        yTilde[i] += covMatrix[i][x]*start[x];
@@ -145,12 +142,13 @@ void getFit(double* start, double* Y, double** covMatrix, double* weights, int n
      start[nEnv] = sqrt(ts/(1.0*df));
    }
 
+   return(0);
    
  }
 
 #ifdef EIGEN
 
-void getFit2(double* start, double* Y, double** covMatrix, double* weights, int nInd4, int nEnv, int df){
+int getFit2(double* start, double* Y, double** covMatrix, double* weights, int nInd4, int nEnv, int df){
 
    /*
      linear regression. Fits a linear model with weights
@@ -163,11 +161,10 @@ void getFit2(double* start, double* Y, double** covMatrix, double* weights, int 
    */
   
    int nIndW=0;
-   char nonZeroWeight[nInd4];
-   memset(nonZeroWeight,0,nInd4);
-   if(weights==NULL){
+   std::vector<double> nonZeroWeight(nInd4);
+    if(weights==NULL){
      nIndW=nInd4;
-     memset(nonZeroWeight,1,nInd4);
+     nonZeroWeight.assign(nInd4,1);
    } else{
      for(int i=0;i<nInd4;i++){
        // checks that weights are greater than 0, and keeps those individuals
@@ -177,10 +174,10 @@ void getFit2(double* start, double* Y, double** covMatrix, double* weights, int 
        }
      }
    }
-   
-   double yw[nIndW]; //<-stripped phenos scaled by stripped weights
-   double xw[nIndW*nEnv]; //<-stripped designs
 
+   std::vector<double> yw(nIndW); //<-stripped phenos scaled by stripped weights
+   std::vector<double> xw(nIndW*nEnv); //<-stripped designs
+    
    int cnt=0;
    for(int i=0;i<nInd4;i++){
      if(nonZeroWeight[i]){
@@ -205,12 +202,10 @@ void getFit2(double* start, double* Y, double** covMatrix, double* weights, int 
    
    for(int x=0;x<nEnv;x++){
      start[x]=x1[x];
-   }   
-    
-   double yTilde[nInd4];
-   for(int i=0;i<nInd4;i++)
-     yTilde[i] = 0;
-
+   }
+   
+   std::vector<double> yTilde(nInd4);
+      
    for(int i=0;i<nInd4;i++)
      for(int x=0;x<nEnv;x++)
        yTilde[i] += covMatrix[i][x]*start[x];
@@ -233,14 +228,17 @@ void getFit2(double* start, double* Y, double** covMatrix, double* weights, int 
      start[nEnv] = sqrt(ts/(1.0*df));
    }
 
+   return(0);
+
  }
 
 #endif
 
 
-void getFitBin(double* start, double* Y, double** covMatrix, double* weights, int nInd4, int nEnv, int df){
+int getFitBin(double* start, double* Y, double** covMatrix, double* weights, int nInd4, int nEnv, int df){
 
   double tol=1e-04;
+  
   /*
     Fits logistic model using iterativt weighted least squares (IWLS)
     linear regression. Fits a logistic model with weights
@@ -253,11 +251,10 @@ void getFitBin(double* start, double* Y, double** covMatrix, double* weights, in
   */
   
   int nIndW=0;
-  char nonZeroWeight[nInd4];
-  memset(nonZeroWeight,0,nInd4);
+  std::vector<double> nonZeroWeight(nInd4);  
   if(weights==NULL){
-    nIndW=nInd4;     
-    memset(nonZeroWeight,1,nInd4);
+    nIndW=nInd4;
+    nonZeroWeight.assign(nInd4,1);    
   } else{
     for(int i=0;i<nInd4;i++){
       if(weights[i]>0){
@@ -267,10 +264,10 @@ void getFitBin(double* start, double* Y, double** covMatrix, double* weights, in
       }
     }
   }
-  
-  double yw[nIndW]; //<-stripped phenos scaled by stripped weights
-  double ww[nIndW]; //<-stripped weights
-  double xw[nIndW*nEnv]; //<-stripped designs
+
+  std::vector<double> yw(nIndW); //<-stripped phenos scaled by stripped weights
+  std::vector<double> ww(nIndW); //<-stripped weights
+  std::vector<double> xw(nIndW*nEnv); //<-stripped designs
   
   int cnt=0;
   for(int i=0;i<nInd4;i++){
@@ -287,33 +284,32 @@ void getFitBin(double* start, double* Y, double** covMatrix, double* weights, in
       cnt++;
     }
   }
-  
-  double mustart[nIndW];
+
+  std::vector<double> mustart(nIndW);  
   // if weights do not exists, have all weights be 1     
   for(int i=0;i<nIndW;i++){
     mustart[i] = (ww[i]*yw[i] + 0.5)/(ww[i] + 1);
   }
-  
-  double eta[nIndW];
+
+  std::vector<double> eta(nIndW);
   for(int i=0;i<nIndW;i++){
     //link
     eta[i] = log(mustart[i]/(1-mustart[i]));
   }
-  
-  double mu[nIndW];
+
+  std::vector<double> mu(nIndW);
   for(int i=0;i<nIndW;i++){
     //linkinv
     mu[i] = 1 / (1 + exp(-eta[i]));
   }
   
-  double mu0[nIndW];
-  double muetaval[nIndW];
-  double z[nIndW];
-  double w[nIndW];  
+  std::vector<double> mu0(nIndW);
+  std::vector<double> muetaval(nIndW);
+  std::vector<double> z(nIndW);
+  std::vector<double> w(nIndW);
+  std::vector<double> Xt_y(nEnv);
+  std::vector<double> invXtX_Xt_y(nEnv);  
   double XtX[nEnv*nEnv] = {0};
-  double Xt_y[nEnv] = {0};
-  double invXtX_Xt_y[nEnv] = {0}; 
-
   
   // we run this 20 times...
    for(int t=0;t<20;t++){
@@ -353,7 +349,10 @@ void getFitBin(double* start, double* Y, double** covMatrix, double* weights, in
      } 
 #endif
      
-     svd_inverse(XtX, nEnv, nEnv);     
+     int singular = svd_inverse(XtX, nEnv, nEnv);
+     if(singular){
+       return(-9);
+     }
      
 #if 0
      //print after inversion
@@ -408,19 +407,22 @@ void getFitBin(double* start, double* Y, double** covMatrix, double* weights, in
      
      // clear those that have +=
      // much faster than setting values 0 than in for loop
-     memset(XtX, 0, sizeof(XtX));
-     memset(Xt_y, 0, sizeof(Xt_y));
-     memset(invXtX_Xt_y, 0, sizeof(invXtX_Xt_y));
+     memset(XtX, 0, sizeof(XtX));    
+     Xt_y.assign(0,nEnv);
+     invXtX_Xt_y.assign(0,nEnv);
      
    }
+
+   return(0);
 
 }
 
 #ifdef  EIGEN
 
-void getFitBin2(double* start, double* Y, double** covMatrix, double* weights, int nInd4, int nEnv, int df){
+int getFitBin2(double* start, double* Y, double** covMatrix, double* weights, int nInd4, int nEnv, int df){
 
   double tol=1e-04;
+  
   /*
     Fits logistic model using iterativt weighted least squares (IWLS)
     linear regression. Fits a logistic model with weights
@@ -447,11 +449,11 @@ void getFitBin2(double* start, double* Y, double** covMatrix, double* weights, i
       }
     }
   }
-  
-  double yw[nIndW]; //<-stripped phenos scaled by stripped weights
-  double ww[nIndW]; //<-stripped weights
-  double xw[nIndW*nEnv]; //<-stripped designs
-  
+
+  std::vector<double> yw(nIndW); //<-stripped phenos scaled by stripped weights
+  std::vector<double> ww(nIndW); //<-stripped weights
+  std::vector<double> xw(nIndW*nEnv); //<-stripped designs
+    
   int cnt=0;
   for(int i=0;i<nInd4;i++){
     if(nonZeroWeight[i]){
@@ -467,32 +469,32 @@ void getFitBin2(double* start, double* Y, double** covMatrix, double* weights, i
       cnt++;
     }
   }
-  
-  double mustart[nIndW];
+
+  std::vector<double> mustart(nIndW);    
   // if weights do not exists, have all weights be 1     
   for(int i=0;i<nIndW;i++){
     mustart[i] = (ww[i]*yw[i] + 0.5)/(ww[i] + 1);
   }
-  
-  double eta[nIndW];
+
+  std::vector<double> eta(nIndW);
   for(int i=0;i<nIndW;i++){
     //link
     eta[i] = log(mustart[i]/(1-mustart[i]));
   }
-  
-  double mu[nIndW];
+
+  std::vector<double> mu(nIndW);
   for(int i=0;i<nIndW;i++){
     //linkinv
     mu[i] = 1 / (1 + exp(-eta[i]));
    }
   
-   double mu0[nIndW];
-   double muetaval[nIndW];
-   double z[nIndW];
-   double w[nIndW];
-   double zw2[nIndW];
-   double xw2[nIndW*nEnv];
-   
+   std::vector<double> mu0(nIndW);
+   std::vector<double> muetaval(nIndW);
+   std::vector<double> z(nIndW);
+   std::vector<double> w(nIndW);
+   std::vector<double> zw2(nIndW);
+   std::vector<double> xw2(nIndW*nEnv);
+     
    // we run this 20 times...
    for(int t=0;t<20;t++){
      
@@ -550,6 +552,8 @@ void getFitBin2(double* start, double* Y, double** covMatrix, double* weights, i
      }
              
    }
+
+   return(0);
 
 }
 
@@ -611,69 +615,6 @@ char pat[2][5][4][3] = {
     }}
 };
 
-double dnorm(double x,double mean,double sd){
-    
-  double fac = 1.0/(sd*sqrt(2.0*M_PI));
-  double val = exp(-(((x-mean)*(x-mean))/(2*sd*sd)));
-  
-  // if val is 0 because exp(-(x-mean)*(x-mean)) is due to underflow, returns low value
-  if(val<lower_bound){
-    return(lower_bound);
-  } else{
-    return fac*val;
-  }
-
-}
-
-double logdnorm(double x, double mean, double sd){    
-  double fac = log(1.0/(sd*sqrt(2.0*M_PI)));
-  //log of exp(-(((x-mean)*(x-mean))/(2*sd*sd))), exp causes overflow
-  double val = -(((x-mean)*(x-mean))/(2*sd*sd));
-  return (fac+val);
-}
-
-
-// from /home/albrecht/github/angsd/fet.c
-// getting log of binomial
-// log\binom{n}{k}
-double lbinom(int n, int k){
-  if (k == 0 || n == k) return 0;
-  return lgamma(n+1) - lgamma(k+1) - lgamma(n-k+1);
-}
-
-
-// from /home/albrecht/github/angsd/misc/contamination2.cpp (called ldbinom in there)
-double logdbinom(int k, int n,double p){
-  return lbinom(n,k)+k*log(p)+(n-k)*log(1-p);
-}
-
-
-double dbinom(int k, int n,double p){
-  return exp(lbinom(n,k)+k*log(p)+(n-k)*log(1-p));
-}
-
-
-double logbernoulli(int k, double p){
-  // if p is 0 or 1, cannot do log
-  // however this because of over/underlow and p i just very close 0 or 1
-  if(p>1-lower_bound){
-    p = 1-lower_bound;
-  } else if(p<lower_bound){
-    p = lower_bound;
-  } 
-    return( log(pow(p,k)*pow(1-p,1-k)) );
-}
-
-double bernoulli(int k, double p){
-  // if p is 0 or 1, cannot do log
-  // however this because of over/underlow and p i just very close 0 or 1
-  if(p>1-lower_bound){
-    p = 1-lower_bound;
-  } else if(p<lower_bound){
-    p = lower_bound;
-  } 
-    return( pow(p,k)*pow(1-p,1-k) );
-}
 
 
 double logLike(double *start,double* pheno,Matrix<double> *design,double *p_sCg,int regression){
@@ -708,57 +649,6 @@ double logLike(double *start,double* pheno,Matrix<double> *design,double *p_sCg,
   return ret;
 }
 
-// emil more numerically stable - I think - seems not to be working 28-09-2018
-double logLike2(double *start,double* pheno,Matrix<double> *design,double *p_sCg,int regression){
-#if 0
-  for(int i=0;i<p->start_len;i++)
-    fprintf(stderr,"%f ",p->start[i]);
-  fprintf(stderr,"\n");
-#endif
-
-  double tmp[design->dx];
-  double ret = 0;
-  for(int i=0;i<design->dx;i++){
-    double m = 0;
-    for(int j=0;j<design->dy;j++){
-      m += design->d[i][j]*start[j];
-    }
-    
-    if(regression==0){
-      // density function of normal distribution
-      m = logdnorm(pheno[i],m,start[design->dy]);      
-    } else{      
-      double prob = exp(m)/(exp(m)+1.0);
-      // now handling if p is 0 or 1 (makes it very small or large)
-      // before I had issues with getting inf or nan values - because were taking log of 0!!
-      m = logbernoulli(pheno[i],prob);
-    }
-    
-    tmp[i] = m + log(p_sCg[i]);    
-    
-  }
-    
-  //colSumsLog
-  double maxval;
-  double sum = 0;
-  for(int i=0;i<design->dx;i++){
-    if(i % 4 == 0){
-      maxval = tmp[i];
-    } else{
-      maxval = std::max(maxval,tmp[i]);     
-    }
-    // trick to avoid over/underflow - log(exp(log(val1)-log(max)) + ...) + log(max) = (exp(log(val1))/exp(log(max)))*(max) + ...
-    // same (exp(log(val1))/exp(log(max)))*(max)
-    if(i % 3 == 0){
-      sum += log(exp(tmp[i-3]-maxval)+exp(tmp[i-2]-maxval)+exp(tmp[i-1]-maxval)+exp(tmp[i]-maxval)) + maxval;
-    }
-  }
-  
-  return(-(sum));
-  
-}
-
-
 inline double logLikeP(pars *p){
   return logLike(p->start,p->pheno,p->design,p->p_sCg,p->regression);
 }
@@ -788,7 +678,7 @@ double updateEM(double *start,Matrix<double> *design,Matrix<double> *ysCgs,doubl
   ysCgs->dy = 4;
 
   // to get rowSums
-  double ycGs[ysCgs->dx];
+  std::vector<double> ycGs(ysCgs->dx);
   for(int i=0;i<ysCgs->dx;i++){
     double tmp = 0;
     for(int j=0;j<ysCgs->dy;j++){
@@ -816,7 +706,7 @@ double updateEM(double *start,Matrix<double> *design,Matrix<double> *ysCgs,doubl
     }
  
    //double resi[nInd];
-   getFit(start,pheno,design->d,weights,nInd*4,design->dy,df);
+   int singular = getFit(start,pheno,design->d,weights,nInd*4,design->dy,df);
   
 #if 0
   for(int i=0;i<=design->dy;i++)
@@ -829,7 +719,7 @@ double updateEM(double *start,Matrix<double> *design,Matrix<double> *ysCgs,doubl
 
 
 //double updateEM(pars *p){
-double logupdateEM(double *start,Matrix<double> *design,Matrix<double> *ysCgs,double *pheno,int nInd,double *p_sCg, int regression, double* weights){
+double logupdateEM(double *start,Matrix<double> *design,Matrix<double> *ysCgs,double *pheno,int nInd,double *p_sCg, int regression, double* weights, int index){
 #if 0
   for(int i=0;i<=design->dy;i++)
     fprintf(stderr,"%f ",start[i]);
@@ -861,7 +751,7 @@ double logupdateEM(double *start,Matrix<double> *design,Matrix<double> *ysCgs,do
   ysCgs->dy = 4;
 
   // to get rowSums
-  double ycGs[ysCgs->dx];
+  std::vector<double> ycGs(ysCgs->dx);
   for(int i=0;i<ysCgs->dx;i++){
     double tmp = 0;
     double maxval = ysCgs->d[i][0];
@@ -893,24 +783,31 @@ double logupdateEM(double *start,Matrix<double> *design,Matrix<double> *ysCgs,do
 
       //check if issue with weights
       if(exp(ysCgs->d[i][j])!=exp(ysCgs->d[i][j]) or std::isinf(exp(ysCgs->d[i][j]))){
-	  fprintf(stderr,"Issue with weights being nan or inf\n");
+	fprintf(stderr,"Issue with weights being nan or inf, for site %i\n",index);
 	  return(-9);
 	}
     }
+
+  int singular;
   
   if(regression==0){
     //double resi[nInd];
 #ifdef EIGEN   
-    getFit2(start,pheno,design->d,weights,nInd*4,design->dy,df);
+    singular = getFit2(start,pheno,design->d,weights,nInd*4,design->dy,df);
 #else
-    getFit(start,pheno,design->d,weights,nInd*4,design->dy,df);
+    singular = getFit(start,pheno,design->d,weights,nInd*4,design->dy,df);
 #endif
   } else{
 #ifdef EIGEN 
-    getFitBin2(start,pheno,design->d,weights,nInd*4,design->dy,df);
+    singular = getFitBin2(start,pheno,design->d,weights,nInd*4,design->dy,df);
 #else
-    getFitBin(start,pheno,design->d,weights,nInd*4,design->dy,df);
+    singular = getFitBin(start,pheno,design->d,weights,nInd*4,design->dy,df);
 #endif    
+  }
+
+  if(singular==-9){
+    fprintf(stderr,"Matrix not invertible, for site %i\n",index);
+    return(-9);
   }
   
 #if 0
@@ -923,73 +820,7 @@ double logupdateEM(double *start,Matrix<double> *design,Matrix<double> *ysCgs,do
 }
 
 inline double updateEMP(pars *p){  
-  return logupdateEM(p->start,p->design,p->ysCgs,p->pheno,p->len,p->p_sCg,p->regression,p->weights);
-}
-
-
-#define FOR(i,n) for(i=0; i<n; i++)
-
-// SEEMS like there might be a problem with underflow when values of matrix are very high
-// APPARENTLY doing matrix inversion for solving linear equations is not a good idea numerically...
-// when using age as covariate, it will work every time if starting value is low (0.4 or below approx.),
-// and not if starting value is above 0.4 approx..., what to do about this??
-
-// XtX is array (N*N long so works like matrix) with allele counts wieghted by prob of state
-// n and m are number of predictors, space is array where results are put into
-int matinv( double x[], int n, int m, double space[]){
-  //from rasmus nielsens code
-  /* x[n*m]  ... m>=n*/
-  register int i,j,k; 
-  int *irow=(int*) space;
-  double ee=1.0e-20, t,t1,xmax;  
-  double det=1.0;
-  
-  FOR (i,n)  {
-    xmax = 0.;
-    for (j=i; j<n; j++) {
-      // finds highest value of X^T*W*X, assuming it has a value > 0
-       if (xmax < fabs(x[j*m+i]))  {
-	 xmax = fabs( x[j*m+i] );
-	 irow[i] = j;
-       }
-    }
-    
-    det *= xmax;
-    if (xmax < ee)   {
-
-      //fprintf(stderr,"First entry of XtX is %f\n",x[0]);
-      fprintf(stderr,"\nDeterminant becomes zero at %3d!\t\n", i+1);
-      return(-1);
-    }
-    
-    if (irow[i] != i) {
-      FOR (j,m) {
-	t = x[i*m+j];
-	x[i*m+j] = x[irow[i] * m + j];
-	x[ irow[i] * m + j] = t;
-      }
-    }
-    t = 1./x[i*m+i];
-    FOR (j,n) {
-       if (j == i) continue;
-       t1 = t*x[j*m+i];
-       FOR(k,m)  x[j*m+k] -= t1*x[i*m+k];
-       x[j*m+i] = -t1;
-    }
-    FOR(j,m)   x[i*m+j] *= t;
-    x[i*m+i] = t;
-  } /* i  */
-
-  for (i=n-1; i>=0; i--) {
-    if (irow[i] == i) continue;
-    FOR(j,n)  {
-      t = x[j*m+i];
-      x[j*m+i] = x[ j*m + irow[i] ];
-      x[ j*m + irow[i] ] = t;
-    }
-  }
-  return (0);
-  
+  return logupdateEM(p->start,p->design,p->ysCgs,p->pheno,p->len,p->p_sCg,p->regression,p->weights,p->index);
 }
 
 
@@ -1067,7 +898,7 @@ void mkDesign(pars *p){
 }
 
 
-double standardError(double *start,Matrix<double> *design,Matrix<double> *ysCgs,double *pheno,int nInd,double *p_sCg, int regression, double *SE, double* weights){
+double standardError(double *start,Matrix<double> *design,Matrix<double> *ysCgs,double *pheno,int nInd,double *p_sCg, int regression, double *SE, double* weights, int index){
   
   double ret;
   for(int i=0;i<design->dx;i++){
@@ -1127,14 +958,12 @@ double standardError(double *start,Matrix<double> *design,Matrix<double> *ysCgs,
 	weights[a++] = exp(ysCgs->d[i][j]);
 	//check if issue with weights
 	if(exp(ysCgs->d[i][j])!=exp(ysCgs->d[i][j]) or std::isinf(exp(ysCgs->d[i][j]))){
-	  fprintf(stderr,"Issue with weights being nan or inf\n");
+	  fprintf(stderr,"Issue with weights being nan or inf, for site %i\n",index);
 	  return(-9);
 	}
       }
-    
-    double yTilde[design->dx];
-    for(int i=0;i<design->dx;i++)
-      yTilde[i] = 0;    
+
+    std::vector<double> yTilde(design->dx);         
     
     for(int i=0;i<design->dx;i++)
       for(int x=0;x<design->dy;x++){
@@ -1144,36 +973,33 @@ double standardError(double *start,Matrix<double> *design,Matrix<double> *ysCgs,
     int count=0;
 
     // this has colSums for each col for each indi (4 rows)
-    double summedDesign[design->dx*4];
-    
-    double tmp[design->dx];
-    
+    std::vector<double> summedDesign((design->dx/4)*design->dy);   
+    std::vector<double> tmp(design->dx);
+        
     for(int i=0;i<design->dx;i++){
       // getting the residuals
       tmp[i] = ((pheno[i]-yTilde[i]) / (start[design->dy]*start[design->dy]))*weights[i];        
       for(int x=0;x<design->dy;x++){                  
 	if(i % 4 == 3){
 	  // for each col take 4 rows for indis and take sum
-	  summedDesign[count*design->dy+x]=design->d[i-3][x]*tmp[i-3]+design->d[i-2][x]*tmp[i-2]+design->d[i-1][x]*tmp[i-1]+design->d[i][x]*tmp[i];
-	}
-	
+	  summedDesign[count*design->dy+x]=design->d[i-3][x]*tmp[i-3]+design->d[i-2][x]*tmp[i-2]+design->d[i-1][x]*tmp[i-1]+design->d[i][x]*tmp[i];	 
+	}	
       }
       if(i % 4 == 3){
 	count++;
-      }
-      
+      }      
     }
     
-    
     double invSummedDesign[design->dy*design->dy];
-    for(int i=0;i<design->dx;i++)
+    for(int i=0;i<design->dy*design->dy;i++)
       invSummedDesign[i]=0;
     // this is doing the matrix product of (X)^T*W*X 
     for(int x=0;x<design->dy;x++)
       for(int y=0;y<design->dy;y++)
-	for(int i=0;i<(int)floor(design->dx/4);i++)
+	for(int i=0;i<(int)floor(design->dx/4);i++){
 	  invSummedDesign[x*design->dy+y]+=summedDesign[i*design->dy+x]*summedDesign[i*design->dy+y];
-    
+	}
+
     // doing inv((X)^T*W*X)
     svd_inverse(invSummedDesign, design->dy, design->dy);
     
@@ -1183,10 +1009,8 @@ double standardError(double *start,Matrix<double> *design,Matrix<double> *ysCgs,
     
   } else{
     
-    double yTilde[design->dx];
-    for(int i=0;i<design->dx;i++)
-      yTilde[i] = 0;
-    
+    std::vector<double> yTilde(design->dx);   
+        
     for(int i=0;i<design->dx;i++)
       for(int x=0;x<design->dy;x++)
 	yTilde[i] += design->d[i][x]*start[x];
@@ -1243,7 +1067,7 @@ void controlEM(pars *p){
     
   }
   if(p->estSE==1){
-    standardError(p->start,p->design,p->ysCgs,p->pheno,p->len,p->p_sCg,p->regression,p->SE,p->weights);
+    standardError(p->start,p->design,p->ysCgs,p->pheno,p->len,p->p_sCg,p->regression,p->SE,p->weights,p->index);
   }
   
 }
@@ -1420,22 +1244,23 @@ void asamEM(pars *p){
     for(int i=0;i<p->design->dy+2;i++)
       p->start[i]=NAN;
 
+    int tmp;
+    
     if(p->regression==0){
 #ifdef EIGEN
-      getFit2(p->start,p->ys,p->design->d,NULL,p->design->dx,p->design->dy,-1);
+      tmp = getFit2(p->start,p->ys,p->design->d,NULL,p->design->dx,p->design->dy,-1);
 #else
-      getFit(p->start,p->ys,p->design->d,NULL,p->design->dx,p->design->dy,-1);
+      tmp = getFit(p->start,p->ys,p->design->d,NULL,p->design->dx,p->design->dy,-1);
 #endif      
     } else{
 #ifdef EIGEN
-      getFitBin2(p->start,p->ys,p->design->d,NULL,p->design->dx,p->design->dy,-1);
+      tmp = getFitBin2(p->start,p->ys,p->design->d,NULL,p->design->dx,p->design->dy,-1);
 #else
-      getFitBin(p->start,p->ys,p->design->d,NULL,p->design->dx,p->design->dy,-1);
+      tmp = getFitBin(p->start,p->ys,p->design->d,NULL,p->design->dx,p->design->dy,-1);
 #endif      
     }
 
-
-    standardError(p->start,p->design,p->ysCgs,p->ys,p->len,p->p_sCg,p->regression,p->SE,NULL);
+    standardError(p->start,p->design,p->ysCgs,p->ys,p->len,p->p_sCg,p->regression,p->SE,NULL,p->index);
     
     // generating full design matrix for likelihood calculations
     mkDesign(p);
@@ -1447,14 +1272,11 @@ void asamEM(pars *p){
 	p->design->d[i*4+j][0] = p->gs[i];
       }
     }            
-    
-    // skips B2 and A1
+       
     // emil - has to skip both B2 and A1 (column 2 and 3 design matrix)
-    for(int i=p->design->dy;i>0;i--){
+    for(int i=p->design->dy;i>2;i--){
       // should let first column be, and move later than 3rd later, 2 columns up (4th->2nd, 5th->3rd,...)
-      if(i>2){
-	p->start[i] = p->start[i-2];
-      }
+      p->start[i] = p->start[i-2];
     }
 
     // B2 and A1 has no effect, as they are not in model, B1 is genotype  
@@ -1480,16 +1302,16 @@ void asamEM(pars *p){
     // double resi[p->design->dx];
     if(p->regression==0){
 #ifdef EIGEN
-      getFit2(p->start,p->ys,p->design->d,NULL,p->design->dx,p->design->dy,-1);      
+      tmp = getFit2(p->start,p->ys,p->design->d,NULL,p->design->dx,p->design->dy,-1);      
 #else
-      getFit(p->start,p->ys,p->design->d,NULL,p->design->dx,p->design->dy,-1);      
+      tmp = getFit(p->start,p->ys,p->design->d,NULL,p->design->dx,p->design->dy,-1);      
 #endif
       
     } else{
 #ifdef EIGEN
-      getFitBin2(p->start,p->ys,p->design->d,NULL,p->design->dx,p->design->dy,-1);
+      tmp = getFitBin2(p->start,p->ys,p->design->d,NULL,p->design->dx,p->design->dy,-1);
 #else
-      getFitBin(p->start,p->ys,p->design->d,NULL,p->design->dx,p->design->dy,-1);
+      tmp = getFitBin(p->start,p->ys,p->design->d,NULL,p->design->dx,p->design->dy,-1);
 #endif
     }
 
@@ -1500,6 +1322,7 @@ void asamEM(pars *p){
     for(int i=p->design->dy;i>2;i--){
       p->start[i] = p->start[i-3];
     }
+    
     p->start[2]=p->start[1]=p->start[0]=0;
            
     printRes(p,0);
@@ -1604,7 +1427,6 @@ void asamEM(pars *p){
     } else{
       printNan(p,2);
     }
-
     
     //////////// do R4 ///////////////
     //cbind gs and covs into design M4:    
@@ -1696,23 +1518,25 @@ void asamEM(pars *p){
     // emil - start gets values in getFit - therefore ok with NAN values
     for(int i=0;i<p->design->dy+2;i++)
       p->start[i]=NAN;
+
+    int tmp;
     
     if(p->regression==0){
       // fitting a model with current R6 design matrix, getting the coefs (stored in start) - (Ordinary least squares)
 #ifdef EIGEN
-      getFit2(p->start,p->ys,p->design->d,NULL,p->design->dx,p->design->dy,-1);      
+      tmp = getFit2(p->start,p->ys,p->design->d,NULL,p->design->dx,p->design->dy,-1);      
 #else
-      getFit(p->start,p->ys,p->design->d,NULL,p->design->dx,p->design->dy,-1);      
+      tmp = getFit(p->start,p->ys,p->design->d,NULL,p->design->dx,p->design->dy,-1);      
 #endif            
     } else{
 #ifdef EIGEN
-      getFitBin2(p->start,p->ys,p->design->d,NULL,p->design->dx,p->design->dy,-1);
+      tmp = getFitBin2(p->start,p->ys,p->design->d,NULL,p->design->dx,p->design->dy,-1);
 #else
-      getFitBin(p->start,p->ys,p->design->d,NULL,p->design->dx,p->design->dy,-1);
+      tmp =  getFitBin(p->start,p->ys,p->design->d,NULL,p->design->dx,p->design->dy,-1);
 #endif            
     }
 
-    standardError(p->start,p->design,p->ysCgs,p->ys,p->len,p->p_sCg,p->regression,p->SE,NULL);
+    standardError(p->start,p->design,p->ysCgs,p->ys,p->len,p->p_sCg,p->regression,p->SE,NULL,p->index);
     
     // generating full design matrix for likelihood calculations
     mkDesign(p);
@@ -1727,22 +1551,20 @@ void asamEM(pars *p){
 	  p->design->d[i*4+j][0] = 0;
 	}
       }
-    }            
+    }             
     
     // emil - has to skip both R2, Rm, delta1 and delta2 (column 2, 3, 4 and 5 design matrix) - obtained by giving coef of 0 (start values)
-    for(int i=p->design->dy;i>0;i--){
-      // should let first column be, and move columns after 4th later, 4 columns up (6th->2nd, 7th->3rd,...)
-      if(i>2){
-	p->start[i] = p->start[i-4];
-      }
-    }
+    for(int i=p->design->dy;i>4;i--){
+      // should let first column be, and move rest of the values 4 index up, (2nd->6th, 3rd->7th,...)
+      p->start[i] = p->start[i-4];
+    }  
+    
     // coefs of R2, Rm, delta1 and delta2 being set to 0
     p->start[4]=p->start[3]=p->start[2]=p->start[1]=0;           
-    
+   
     //print to kbuf
     printRes(p,1);
  
-
     //////////// do R7 ///////////////      
       
     for(int i=0;i<p->covs->dx;i++){
@@ -1763,28 +1585,27 @@ void asamEM(pars *p){
     if(p->regression==0){
       // fitting a model with current R6 design matrix, getting the coefs (stored in start) - (Ordinary least squares)
 #ifdef EIGEN
-      getFit2(p->start,p->ys,p->design->d,NULL,p->design->dx,p->design->dy,-1);      
+      tmp = getFit2(p->start,p->ys,p->design->d,NULL,p->design->dx,p->design->dy,-1);      
 #else
-      getFit(p->start,p->ys,p->design->d,NULL,p->design->dx,p->design->dy,-1);      
+      tmp = getFit(p->start,p->ys,p->design->d,NULL,p->design->dx,p->design->dy,-1);      
 #endif            
     } else{
 #ifdef EIGEN
-      getFitBin2(p->start,p->ys,p->design->d,NULL,p->design->dx,p->design->dy,-1);
+      tmp = getFitBin2(p->start,p->ys,p->design->d,NULL,p->design->dx,p->design->dy,-1);
 #else
-      getFitBin(p->start,p->ys,p->design->d,NULL,p->design->dx,p->design->dy,-1);
+      tmp = getFitBin(p->start,p->ys,p->design->d,NULL,p->design->dx,p->design->dy,-1);
 #endif            
     }
 
     // generating full design matrix for likelihood calculations
     mkDesign(p);
-    
+            
     // emil - has to skip both R1, R2, Rm, delta1 and delta2 (column 1, 2, 3, 4 and 5 design matrix)
-    for(int i=p->design->dy;i>0;i--){
-      // move column 5 columns up (6th->1st, 7th->2nd,...)
-      if(i>2){
-	p->start[i] = p->start[i-5];
-      }
-    }
+    for(int i=p->design->dy;i>4;i--){
+      // move values 5 indexes up (1st->6th, 2nd->7th,...) - for generating likelihood
+      p->start[i] = p->start[i-5];
+    }      
+            
     p->start[4]=p->start[3]=p->start[2]=p->start[1]=p->start[0]=0;   
             
     //print to kbuf

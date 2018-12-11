@@ -78,6 +78,12 @@ gzFile getGz(const char*fname,const char* mode);
 
 int isNewer(const char *newer,const char *older);
 
-
-
 double sum(double*,size_t l,int doLog);
+
+double dnorm(double x,double mean,double sd);
+double logdnorm(double x, double mean, double sd);
+double lbinom(int n, int k);
+double logdbinom(int k, int n,double p);
+double dbinom(int k, int n,double p);
+double logbernoulli(int k, double p);
+double bernoulli(int k, double p);

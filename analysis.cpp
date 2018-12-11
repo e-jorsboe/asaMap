@@ -39,8 +39,8 @@ double sd(double *a,int l){
 }
 
 
-// emil - other func
-double sd2(const std::vector<double> &phe){
+// get standard deviation
+double sd(const std::vector<double> &phe){
   double ts = 0;
   int l = phe.size();
   for(int i=0;i<l;i++)
@@ -54,27 +54,16 @@ double sd2(const std::vector<double> &phe){
   return ts/(1.0*(l-1.0));
 }
 
-// emil - other version did not calculate sd(y) properly!! provided long length of array and not actual phenos!
-void rstart(double *ary,size_t l, const std::vector<double> &phe){
-  for(int i=0;i<l;i++){
-   ary[i] = drand48()*2-1;
-   //  fprintf(stderr,"ary[%d]:%f\n",i,ary[i]);
-  }
-  // emil - for sd estimate use sd of y
-  ary[l]=sd2(phe);
-}
 
-// emil new random number generator, other one seemed to always generate negative values
-void rstart2(double *ary,size_t l, const std::vector<double> &phe, double fMin, double fMax){
+// emil new random number generator
+void rstart(double *ary,size_t l, const std::vector<double> &phe, double fMin, double fMax){
   for(int i=0;i<l;i++){
     double f = (double)rand() / RAND_MAX;
     ary[i] = fMin + f * (fMax - fMin);
    //  fprintf(stderr,"ary[%d]:%f\n",i,ary[i]);
-  }
-  
+  } 
   // emil - for sd estimate use sd of y
-  ary[l]=sd2(phe);
-
+  ary[l]=sd(phe);
 }
 
 pars *init_pars(size_t l,size_t ncov,int model,int maxInter,double tole,std::vector<double> &start, const std::vector<double> &phe, int regression, FILE* logFile, int estSE){
@@ -86,12 +75,9 @@ pars *init_pars(size_t l,size_t ncov,int model,int maxInter,double tole,std::vec
   p->gs=new char[l];
   p->ys=new double[l];
   p->qvec=new double[l];
-  //p->mafs=new double[l];
   // has to have column of 1s
   p->covs=initMatrix(l,ncov);
 
-  // emil - added 3rd column for alternate allele
-  //p->design=initMatrix(4*l,ncov+2); 
   p->pheno = new double[4*l];
   p->p_sCg = new double[4*l];
   p->weights = new double[4*l];
@@ -144,22 +130,15 @@ pars *init_pars(size_t l,size_t ncov,int model,int maxInter,double tole,std::vec
   for(int i=0;i<start.size();i++)
     p->start[i] = start[i];
   if(start.size()==0){
-    //make better start guess at some point
-    //void rstart(double *,size_t);
-    // emil - will put in random numbers as starting guess - put new random function
     if(model==0){
-      //rstart(p->start,ncov+3,phe);//<-will put sd at p->start[p->covs+dy+1]
-      rstart2(p->start,ncov+3,phe,-1,1);//<-will put sd at p->start[p->covs+dy+1]
-
+      rstart(p->start,ncov+3,phe,-1,1);//<-will put sd at p->start[p->covs+dy+1]
       //if logisitc regression set last start value to 0
       if(p->regression==1){
 	p->start[ncov+3]=0;
       }
            
     } else{
-      //rstart(p->start,ncov+5,phe);//<-will put sd at p->start[p->covs+dy+1]
-      rstart2(p->start,ncov+5,phe,-1,1);//<-will put sd at p->start[p->covs+dy+1]
-
+      rstart(p->start,ncov+5,phe,-1,1);//<-will put sd at p->start[p->covs+dy+1]
       //if logisitc regression set last start value to 0
       if(p->regression==1){
 	p->start[ncov+5]=0;
@@ -225,7 +204,7 @@ void check_pars(pars* p, const std::vector<double> &phe, Matrix<double> &cov){
 
 
 
-void set_pars(pars*p, char *g,const std::vector<double> &phe, const std::vector<double> &ad, double *freq, std::vector<double> start, Matrix<double> &cov, char *site){
+void set_pars(pars*p, char *g,const std::vector<double> &phe, const std::vector<double> &ad, double *freq, std::vector<double> start, Matrix<double> &cov, char *site, int y){
 
   // because has to count up how many individuals analysed for this site - due to missing genotypes
   p->len=0;
@@ -250,10 +229,8 @@ void set_pars(pars*p, char *g,const std::vector<double> &phe, const std::vector<
   // add extra covariate of intercept
   p->covs->dy=cov.dy+1;
   p->mafs = freq;
+  p->index = y;
   
-  //might try and protect from getting a too large (X^T*W*X) matrix, that is to be inverted
-  //by dividing the start value for the covariate with too high mean with 1/mean(covariate)
-
   for(int i=0;i<p->len;i++){
     for(int j=0;j<4;j++){
       p->pheno[i*4+j] = p->ys[i];
@@ -276,14 +253,14 @@ void set_pars(pars*p, char *g,const std::vector<double> &phe, const std::vector<
 
 
 void wrap(const plink *plnk,const std::vector<double> &phe,const std::vector<double> &ad,Matrix<double> &freq,int model,std::vector<double> start,Matrix<double> &cov,int maxIter,double tol,std::vector<char*> &loci,int nThreads,FILE* outFile, FILE* logFile, int regression, int estSE){
-  //fprintf(stderr,"\t-> plinkdim: x->%lu y->%lu\n",plnk->x,plnk->y);
-  //return ;
+
   char **d = new char*[plnk->y];//transposed of plink->d. Not sure what is best, if we filterout nonmissing anyway.
   for(int i=0;i<plnk->y;i++){
     d[i] = new char[plnk->x];
     for(int j=0;j<plnk->x;j++)
       d[i][j]=plnk->d[j][i];
   }
+  
   //we prep for threading. By using encapsulating all data need for a site in struct called pars
   pars *p=init_pars(plnk->x,cov.dy,model,maxIter,tol,start,phe,regression,logFile,estSE);
 
@@ -330,8 +307,10 @@ void wrap(const plink *plnk,const std::vector<double> &phe,const std::vector<dou
       fprintf(stderr,"skipping site[%d] due to excess missingness\n",y);
       continue;
     }
+    
     //check that we observe atleast 10 obs of 2 different genotypes
     int n=0;
+    
     // changed i to 3, as we do not want to consider missing geno a different genotype
     for(int i=0;i<3;i++)
       if(cats2[i]>1)
@@ -341,19 +320,13 @@ void wrap(const plink *plnk,const std::vector<double> &phe,const std::vector<dou
       fprintf(stderr,"skipping site[%d] due to categories filter\n",y);
       continue;
     }
-     
-    //   if(freq.d[y][0]>0.999||freq.d[y][0]<0.001){
-    //  fprintf(stderr,"skipping site[%d] due to maf filter\n",y);
-    //  continue;
-    // }
-
-    set_pars(p,d[y],phe,ad,freq.d[y],start,cov,loci[y]);
+         
+    set_pars(p,d[y],phe,ad,freq.d[y],start,cov,loci[y],y);
 
     main_anal((void*)p);
     analysedSites++;
     fprintf(outFile,"%s\t%s\n",p->bufstr.s,p->tmpstr.s);
     p->bufstr.l=p->tmpstr.l=0;
-    //break;
 
   }
 
