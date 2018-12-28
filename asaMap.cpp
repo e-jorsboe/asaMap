@@ -408,8 +408,8 @@ int getFitBin(double* start, double* Y, double** covMatrix, double* weights, int
      // clear those that have +=
      // much faster than setting values 0 than in for loop
      memset(XtX, 0, sizeof(XtX));    
-     Xt_y.assign(0,nEnv);
-     invXtX_Xt_y.assign(0,nEnv);
+     Xt_y.assign(nEnv,0);
+     invXtX_Xt_y.assign(nEnv,0);
      
    }
 
