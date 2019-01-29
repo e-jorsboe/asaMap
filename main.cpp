@@ -174,6 +174,12 @@ int main(int argc,char **argv){
     for(int i=0;i<Q.dx;i++){
       adprop[i]=Q.d[i][0];      
     }
+    
+    for(int i=0;i<Q.dx;i++){
+      delete [] Q.d[i];
+    }
+    delete [] Q.d;        
+    
   }  else if(adname!=NULL){
     // make so can give .Q file instead of just 1 column file...
     adprop = getArrayCheck(adname);
@@ -242,8 +248,8 @@ int main(int argc,char **argv){
  
   for(uint i=0;i<loci.size();i++){
     free(loci[i]);
-  }
-
+  }   
+  
   fprintf(stderr, "\t[ALL done] cpu-time used =  %.2f sec\n", (float)(clock() - t) / CLOCKS_PER_SEC);
   fprintf(stderr, "\t[ALL done] walltime used =  %.2f sec\n", (float)(time(NULL) - t2));
 

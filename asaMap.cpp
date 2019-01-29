@@ -1044,7 +1044,7 @@ void controlEM(pars *p){
   double llh0 = logLikeP(p);
   double llh1;
   for(int i=0;i<p->maxIter;i++){
-    llh1 = updateEMP(p);        
+    llh1 = updateEMP(p);
     if(fabs(llh1-llh0)<p->tol and llh1 > 0){	 
       //	 fprintf(stderr,"Converged \n");
       break;

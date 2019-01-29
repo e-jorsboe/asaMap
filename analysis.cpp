@@ -18,6 +18,7 @@ void kill_pars(pars *p,size_t l){
   delete [] p->start;
   delete [] p->start0;
   delete [] p->SE;
+  delete [] p->weights;
   
   free(p->bufstr.s);free(p->tmpstr.s);
   delete p;  
