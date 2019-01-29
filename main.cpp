@@ -60,14 +60,14 @@ void print_info(FILE *fp){
   fprintf(fp, "   -a <filename>       admixproportions (for source pop1)\n");
   fprintf(fp, "   -Q <filename>       .Q file from ADMIXTURE\n");
   fprintf(fp, "   -f <filename>       allele frequencies (.P file)\n");
-  fprintf(fp, "   -m <INTEGER>        model 0=add 1=rec\n");
-  fprintf(fp, "   -l <INTEGER>        regression 0=linear regression, 1=logistic regression\n");
+  fprintf(fp, "   -m <INTEGER>        model 0=add 1=rec (default: 0)\n");
+  fprintf(fp, "   -l <INTEGER>        regression 0=linear regression, 1=logistic regression (default: 0)\n");
   fprintf(fp, "   -b <filename>       file containing the start\n");
-  fprintf(fp, "   -i <UINTEGER>       maximum iterations\n");
-  fprintf(fp, "   -t <FLOAT>          tolerance for breaking EM\n");
+  fprintf(fp, "   -i <UINTEGER>       maximum iterations (default: 40)\n");
+  fprintf(fp, "   -t <FLOAT>          tolerance for breaking EM (default: 0.0001)\n");
   fprintf(fp, "   -r <FLOAT>          seed for rand\n");
   //fprintf(fp, "   -P <INT>            number of threads\n");
-  fprintf(fp, "   -e <INT>            estimate standard error of coefficients (0: no, 1: yes)\n");
+  fprintf(fp, "   -e <INT>            estimate standard error of coefficients (0: no (default), 1: yes)\n");
   fprintf(fp, "\n");
 }
 

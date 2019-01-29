@@ -1169,7 +1169,7 @@ void asamEM(pars *p){
     // remove third column from design - column counting A1, remember start has sd(y) at the end (one longer)
     rmPos(p->start,2,p->covs->dy+3+1);
     rmCol(p->design,2);
-    
+        
     if(maf0 && maf1){
       controlEM(p);
       printRes(p,2); 
