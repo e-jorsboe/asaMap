@@ -68,6 +68,7 @@ void print_info(FILE *fp){
   fprintf(fp, "   -r <FLOAT>          seed for rand\n");
   //fprintf(fp, "   -P <INT>            number of threads\n");
   fprintf(fp, "   -e <INT>            estimate standard error of coefficients (0: no (default), 1: yes)\n");
+  fprintf(fp, "   -w <INT>            run M0/R0 model that models effect of other allele (0: no, 1: yes (default))\n");
   fprintf(fp, "\n");
 }
 
@@ -101,7 +102,8 @@ int main(int argc,char **argv){
   int seed = time(NULL);
   int nThreads = 1;
   int estSE = 0;
-
+  int useM0R0 = 1;
+  
   argv++;
   while(*argv){
     // reading in arguments
@@ -133,6 +135,8 @@ int main(int argc,char **argv){
     // number of threads
     else if(strcmp(*argv,"-P")==0) nThreads=atoi(*++argv);
     else if(strcmp(*argv,"-e")==0) estSE=atoi(*++argv);
+    // run M0/R0 model or not
+    else if(strcmp(*argv,"-w")==0) useM0R0=atoi(*++argv);
     else{
       fprintf(stderr,"Unknown arg:%s\n",*argv);
       FILE *fp=stderr;
@@ -205,10 +209,13 @@ int main(int argc,char **argv){
   assert(regression==0 || regression==1);
   // no standard error or standard error
   assert(estSE==0 || estSE==1);
+  // no standard error or standard error
+  assert(useM0R0==0 || useM0R0==1);
+  
   
   fprintf(logFile,"Command had following options :\t -p %s -o %s ",pname,outname);
   fprintf(logFile,"-c %s -y %s -Q %s -a %s -f %s -i %i -t %f -m %i -l %i -r %i ",covname,phename,qname,adname,freqname,mIter,tol,model,regression,seed);
-  fprintf(logFile,"-P %i -b %s\n",nThreads,startname);
+  fprintf(logFile,"-P %i -b %s, -e %i, -w %i\n",nThreads,startname,estSE,useM0R0);
   fprintf(logFile,"\n");
   fprintf(logFile,"Seed is: %i\n",seed);
   fprintf(logFile,"\n");
@@ -229,7 +236,7 @@ int main(int argc,char **argv){
   // flush to disk - or force to write to disk 
   fflush(logFile);
   
-  wrap(p,pheno,adprop,f,model,s,cov,mIter,tol,loci,nThreads,outFile,logFile,regression,estSE);
+  wrap(p,pheno,adprop,f,model,s,cov,mIter,tol,loci,nThreads,outFile,logFile,regression,estSE,useM0R0);
 
   //cleanup
   kill_plink(p);
@@ -241,7 +248,7 @@ int main(int argc,char **argv){
   }
   delete [] cov.d;
   
-  for(int i=0;i<f.dx;i++){
+  for(int i=0;i<f.dx;i++){    
     delete [] f.d[i];
   }
   delete [] f.d;

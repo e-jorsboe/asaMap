@@ -67,7 +67,7 @@ void rstart(double *ary,size_t l, const std::vector<double> &phe, double fMin, d
   ary[l]=sd(phe);
 }
 
-pars *init_pars(size_t l,size_t ncov,int model,int maxInter,double tole,std::vector<double> &start, const std::vector<double> &phe, int regression, FILE* logFile, int estSE){
+pars *init_pars(size_t l,size_t ncov,int model,int maxInter,double tole,std::vector<double> &start, const std::vector<double> &phe, int regression, FILE* logFile, int estSE, int useM0R0){
   pars *p=new pars;
   p->len=l;
   // also intercept (which is not specified)
@@ -88,15 +88,21 @@ pars *init_pars(size_t l,size_t ncov,int model,int maxInter,double tole,std::vec
   p->model = model;
   p->regression = regression;
   p->estSE = estSE;
+  p->useM0R0 = useM0R0;
   
   if(model==0){
     // for the add model where design matrix has B1, B2, A1, covs
     // start has the same + sd(y) - so one longer than row in design matrix
-    if(estSE){
+    if(estSE and useM0R0){
       ksprintf(&p->bufstr,"Chromo\tPosition\tnInd\tf1\tf2\tllh(M0)\tllh(M1)\tllh(M2)\tllh(M3)\tllh(M4)\tllh(M5)\tb1(M1)\tb2(M1)\tSE(b1(M1))\tSE(b2(M1))\tb1(M2)\tSE(b1(M2))\tb2(M3)\tSE(b2(M3))\tb(M4)\tSE(b(M4))\n");      
+    } else if(estSE){
+      ksprintf(&p->bufstr,"Chromo\tPosition\tnInd\tf1\tf2\tllh(M1)\tllh(M2)\tllh(M3)\tllh(M4)\tllh(M5)\tb1(M1)\tb2(M1)\tSE(b1(M1))\tSE(b2(M1))\tb1(M2)\tSE(b1(M2))\tb2(M3)\tSE(b2(M3))\tb(M4)\tSE(b(M4))\n");            
+    } else if(useM0R0){
+      ksprintf(&p->bufstr,"Chromo\tPosition\tnInd\tf1\tf2\tllh(M0)\tllh(M1)\tllh(M2)\tllh(M3)\tllh(M4)\tllh(M5)\tb1(M1)\tb2(M1)\tb1(M2)\tb2(M3)\tb(M4)\n");      
     } else{
-      ksprintf(&p->bufstr,"Chromo\tPosition\tnInd\tf1\tf2\tllh(M0)\tllh(M1)\tllh(M2)\tllh(M3)\tllh(M4)\tllh(M5)\tb1(M1)\tb2(M1)\tb1(M2)\tb2(M3)\tb(M4)\n");
+      ksprintf(&p->bufstr,"Chromo\tPosition\tnInd\tf1\tf2\tllh(M1)\tllh(M2)\tllh(M3)\tllh(M4)\tllh(M5)\tb1(M1)\tb2(M1)\tb1(M2)\tb2(M3)\tb(M4)\n");
     }
+
     // also has to have intercept
     p->design=initMatrix(4*l,ncov+3);
     
@@ -108,54 +114,60 @@ pars *init_pars(size_t l,size_t ncov,int model,int maxInter,double tole,std::vec
   } else{
     // for the add model where design matrix has R1, R2, Rm, delta1, delta2, covs (delta: rec for other allele - A)
     // start has the same + sd(y) - so one longer than row in design matrix
-    if(estSE){
-       ksprintf(&p->bufstr,"Chromo\tPosition\tnInd\tf1\tf2\tllh(R0)\tllh(R1)\tllh(R2)\tllh(R3)\tllh(R4)\tllh(R5)\tllh(R6)\tllh(R7)\tb1(R1)\tb2(R1)\tbm(R1)\tSE(b1(R1))\tSE(b2(R1))\tSE(bm(R1))\tb1(R2)\tb2m(R2)\tSE(b1(R2))\tSE(b2m(R2))\tb1m(R3)\tb2(R3)\tSE(b1m(R3))\tSE(b2(R3))\tb1(R4)\tSE(b1(R4))\tb2(R5)\tSE(b2(R5))\tb(R6)\tSE(b(R6))\n");
-    } else{
-      ksprintf(&p->bufstr,"Chromo\tPosition\tnInd\tf1\tf2\tllh(R0)\tllh(R1)\tllh(R2)\tllh(R3)\tllh(R4)\tllh(R5)\tllh(R6)\tllh(R7)\tb1(R1)\tb2(R1)\tbm(R1)\tb1(R2)\tb2m(R2)\tb1m(R3)\tb2(R3)\tb1(R4)\tb2(R5)\tb(R6)\n");
+
+  if(estSE and useM0R0){
+    ksprintf(&p->bufstr,"Chromo\tPosition\tnInd\tf1\tf2\tllh(R0)\tllh(R1)\tllh(R2)\tllh(R3)\tllh(R4)\tllh(R5)\tllh(R6)\tllh(R7)\tb1(R1)\tb2(R1)\tbm(R1)\tSE(b1(R1))\tSE(b2(R1))\tSE(bm(R1))\tb1(R2)\tb2m(R2)\tSE(b1(R2))\tSE(b2m(R2))\tb1m(R3)\tb2(R3)\tSE(b1m(R3))\tSE(b2(R3))\tb1(R4)\tSE(b1(R4))\tb2(R5)\tSE(b2(R5))\tb(R6)\tSE(b(R6))\n");
+  } else if(estSE){
+    ksprintf(&p->bufstr,"Chromo\tPosition\tnInd\tf1\tf2\tllh(R1)\tllh(R2)\tllh(R3)\tllh(R4)\tllh(R5)\tllh(R6)\tllh(R7)\tb1(R1)\tb2(R1)\tbm(R1)\tSE(b1(R1))\tSE(b2(R1))\tSE(bm(R1))\tb1(R2)\tb2m(R2)\tSE(b1(R2))\tSE(b2m(R2))\tb1m(R3)\tb2(R3)\tSE(b1m(R3))\tSE(b2(R3))\tb1(R4)\tSE(b1(R4))\tb2(R5)\tSE(b2(R5))\tb(R6)\tSE(b(R6))\n");
+  } else if(useM0R0){
+    ksprintf(&p->bufstr,"Chromo\tPosition\tnInd\tf1\tf2\tllh(R0)\tllh(R1)\tllh(R2)\tllh(R3)\tllh(R4)\tllh(R5)\tllh(R6)\tllh(R7)\tb1(R1)\tb2(R1)\tbm(R1)\tb1(R2)\tb2m(R2)\tb1m(R3)\tb2(R3)\tb1(R4)\tb2(R5)\tb(R6)\n");
+  } else{
+    ksprintf(&p->bufstr,"Chromo\tPosition\tnInd\tf1\tf2\tllh(R1)\tllh(R2)\tllh(R3)\tllh(R4)\tllh(R5)\tllh(R6)\tllh(R7)\tb1(R1)\tb2(R1)\tbm(R1)\tb1(R2)\tb2m(R2)\tb1m(R3)\tb2(R3)\tb1(R4)\tb2(R5)\tb(R6)\n");
+  }
+  
+  
+  // also has to have intercept
+  p->design=initMatrix(4*l,ncov+5);    
+  // this one has one starting guess for 5 coefs and covar + sd at the end, index ncov+6
+  p->start = new double[ncov+6];
+  p->start0 = new double[ncov+6];
+  p->SE = new double[ncov+6];
+  
+ }
+
+p->ysCgs = initMatrix(l,ncov+6);//now we are just allocating enough enough
+p->maxIter = maxInter;
+p->tol = tole;
+
+//plugin a start
+for(int i=0;i<start.size();i++)
+  p->start[i] = start[i];
+if(start.size()==0){
+  if(model==0){
+    rstart(p->start,ncov+3,phe,-1,1);//<-will put sd at p->start[p->covs+dy+1]
+    //if logisitc regression set last start value to 0
+    if(p->regression==1){
+      p->start[ncov+3]=0;
     }
-       
-    // also has to have intercept
-    p->design=initMatrix(4*l,ncov+5);    
-    // this one has one starting guess for 5 coefs and covar + sd at the end, index ncov+6
-    p->start = new double[ncov+6];
-    p->start0 = new double[ncov+6];
-    p->SE = new double[ncov+6];
+    
+  } else{
+    rstart(p->start,ncov+5,phe,-1,1);//<-will put sd at p->start[p->covs+dy+1]
+    //if logisitc regression set last start value to 0
+    if(p->regression==1){
+      p->start[ncov+5]=0;
+    }
     
   }
-   
-  p->ysCgs = initMatrix(l,ncov+6);//now we are just allocating enough enough
-  p->maxIter = maxInter;
-  p->tol = tole;
+ }
 
-  //plugin a start
-  for(int i=0;i<start.size();i++)
-    p->start[i] = start[i];
-  if(start.size()==0){
-    if(model==0){
-      rstart(p->start,ncov+3,phe,-1,1);//<-will put sd at p->start[p->covs+dy+1]
-      //if logisitc regression set last start value to 0
-      if(p->regression==1){
-	p->start[ncov+3]=0;
-      }
-           
-    } else{
-      rstart(p->start,ncov+5,phe,-1,1);//<-will put sd at p->start[p->covs+dy+1]
-      //if logisitc regression set last start value to 0
-      if(p->regression==1){
-	p->start[ncov+5]=0;
-      }
-
-    }
-  }
-   
-  //copy it to the start0 which will be copied to start for each new site
-  // emil has to be + 4, because also needs to copy sd(y) - last value of start
-  if(model==0){
-    memcpy(p->start0,p->start,sizeof(double)*(ncov+4));
-  } else{
-    memcpy(p->start0,p->start,sizeof(double)*(ncov+6));
-  }
-  return p;
+//copy it to the start0 which will be copied to start for each new site
+// emil has to be + 4, because also needs to copy sd(y) - last value of start
+if(model==0){
+  memcpy(p->start0,p->start,sizeof(double)*(ncov+4));
+ } else{
+  memcpy(p->start0,p->start,sizeof(double)*(ncov+6));
+ }
+return p;
 }
 
 
@@ -253,7 +265,7 @@ void set_pars(pars*p, char *g,const std::vector<double> &phe, const std::vector<
 }
 
 
-void wrap(const plink *plnk,const std::vector<double> &phe,const std::vector<double> &ad,Matrix<double> &freq,int model,std::vector<double> start,Matrix<double> &cov,int maxIter,double tol,std::vector<char*> &loci,int nThreads,FILE* outFile, FILE* logFile, int regression, int estSE){
+void wrap(const plink *plnk,const std::vector<double> &phe,const std::vector<double> &ad,Matrix<double> &freq,int model,std::vector<double> start,Matrix<double> &cov,int maxIter,double tol,std::vector<char*> &loci,int nThreads,FILE* outFile, FILE* logFile, int regression, int estSE, int useM0R0){
 
   char **d = new char*[plnk->y];//transposed of plink->d. Not sure what is best, if we filterout nonmissing anyway.
   for(int i=0;i<plnk->y;i++){
@@ -263,7 +275,7 @@ void wrap(const plink *plnk,const std::vector<double> &phe,const std::vector<dou
   }
   
   //we prep for threading. By using encapsulating all data need for a site in struct called pars
-  pars *p=init_pars(plnk->x,cov.dy,model,maxIter,tol,start,phe,regression,logFile,estSE);
+  pars *p=init_pars(plnk->x,cov.dy,model,maxIter,tol,start,phe,regression,logFile,estSE,useM0R0);
 
   // check that pheno and covariates are OK
   check_pars(p, phe, cov);

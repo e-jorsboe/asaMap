@@ -849,6 +849,46 @@ void p_sCg(pars *p){
   
 }
 
+// calculates expected state for priming EM algo
+// creates design matrix where has expected state for each pop-allele
+Matrix<double>* expectedDesign(pars *p){
+  
+  // design has 4 rows for each indi
+  int sites = p->design->dx/4;
+  int columns = p->design->dy;
+  Matrix<double>* expectedMatrix=initMatrix(sites,columns);
+  
+  expectedMatrix->dx=sites;
+  expectedMatrix->dy=columns;
+  
+  //set matrix to 0?
+  for(size_t i=0;i<sites;i++)
+    for(size_t j=0;j<columns;j++)
+      expectedMatrix->d[i][j] = 0;
+  
+  
+  for(int i=0;i<p->len;i++){
+    for(int n=0;n<3;n++){
+      for(int j=0;j<4;j++){
+	
+ 	// we have to create matrix with 4 identical rows
+	expectedMatrix->d[i][n] += pat[p->model][n][j][p->gs[i]]*p->p_sCg[i*4+j];
+
+      }
+    }
+
+    if(p->useM0R0){
+      for(int c=0;c<p->covs->dy;c++)
+	expectedMatrix->d[i][3+c] = p->covs->d[i][c];
+    } else{
+      for(int c=0;c<p->covs->dy;c++)
+	expectedMatrix->d[i][2+c] = p->covs->d[i][c];      
+    }
+  }
+  
+  return(expectedMatrix);
+  
+}
 
 void mkDesign(pars *p){
 
@@ -1050,7 +1090,7 @@ void controlEM(pars *p){
       break;
     } else if(llh0<llh1){
       //	 fprintf(stderr,"Fit caused increase in likelihood, will roll back to previous step\n");		 
-      memcpy(p->start,pars0,sizeof(double)*(p->design->dy+1));	
+      memcpy(p->start,pars0,sizeof(double)*(p->design->dy+1));
       break;
     } else if(llh1<-4){
       // if issue with weights that are nan or inf
@@ -1144,32 +1184,86 @@ void asamEM(pars *p){
   if(p->mafs[1]>0.995||p->mafs[1]<0.005){
     maf1=0;    
   }
- 
+
+  int tmp;
+  
   // p->model is either 0 (add model) or 1 (rec model)
   if(p->model==0){
 
-    //////////// do M0 - model with also A1 ///////////////   
+    //////////// do M0 - model with also A1 ///////////////
+   
+    if(p->useM0R0){
     
-    mkDesign(p);
-    p_sCg(p);
-    if(maf0 && maf1){
-      controlEM(p);
-      printRes(p,0); 
-    } else{
-      printNan(p,0);
+      mkDesign(p);
+      p_sCg(p);
+                  
+      Matrix<double>* expD = expectedDesign(p);    
+      
+      if(p->regression==0){
+#ifdef EIGEN
+	tmp = getFit2(p->start,p->ys,expD->d,NULL,expD->dx,expD->dy,-1);
+#else
+	tmp = getFit(p->start,p->ys,expD->d,NULL,expD->dx,expD->dy,-1);
+#endif      
+      } else{
+#ifdef EIGEN
+	tmp = getFitBin2(p->start,p->ys,expD->d,NULL,expD->dx,expD->dy,-1);
+#else
+	tmp = getFitBin(p->start,p->ys,expD->d,NULL,expD->dx,expD->dy,-1);
+#endif      
+      }
+
+      kill(expD);
+      
+      if(maf0 && maf1){
+	controlEM(p);
+	printRes(p,0); 
+      } else{
+	printNan(p,0);
+      }
+           
     }
-    
-    //////////// do M1 ///////////////    
-    //remove column3 and third value from start M0
-    
-    mkDesign(p);
-    p_sCg(p);
-    //reuse coefs from M0 for faster converging of M1 model
-     
-    // remove third column from design - column counting A1, remember start has sd(y) at the end (one longer)
-    rmPos(p->start,2,p->covs->dy+3+1);
-    rmCol(p->design,2);
-        
+
+    if(not p->useM0R0){
+      
+      mkDesign(p);
+      p_sCg(p);
+
+      rmPos(p->start,2,p->covs->dy+3+1);
+      rmCol(p->design,2);
+            
+      Matrix<double>* expD = expectedDesign(p);    
+      
+      if(p->regression==0){
+#ifdef EIGEN
+	tmp = getFit2(p->start,p->ys,expD->d,NULL,expD->dx,expD->dy,-1);
+#else
+	tmp = getFit(p->start,p->ys,expD->d,NULL,expD->dx,expD->dy,-1);
+#endif      
+      } else{
+#ifdef EIGEN
+	tmp = getFitBin2(p->start,p->ys,expD->d,NULL,expD->dx,expD->dy,-1);
+#else
+	tmp = getFitBin(p->start,p->ys,expD->d,NULL,expD->dx,expD->dy,-1);
+#endif      
+      }
+
+      kill(expD);	
+      
+    } else{
+      
+      //////////// do M1 ///////////////    
+      //remove column3 and third value from start M0
+      
+      mkDesign(p);
+      p_sCg(p);
+      //reuse coefs from M0 for faster converging of M1 model
+      
+      // remove third column from design - column counting A1, remember start has sd(y) at the end (one longer)
+      rmPos(p->start,2,p->covs->dy+3+1);
+      rmCol(p->design,2);
+    }
+      
     if(maf0 && maf1){
       controlEM(p);
       printRes(p,2); 
@@ -1244,7 +1338,7 @@ void asamEM(pars *p){
     for(int i=0;i<p->design->dy+2;i++)
       p->start[i]=NAN;
 
-    int tmp;
+    //int tmp;
     
     if(p->regression==0){
 #ifdef EIGEN
@@ -1330,31 +1424,80 @@ void asamEM(pars *p){
   } else{
         
     //////////// do R0 - model with also delta1 and delta2 (rec for alternative allele) ///////////////
-    
-    mkDesign(p);
-    p_sCg(p);
-     
-    if(maf0 && maf1){
-      controlEM(p);
-      printRes(p,0); 
-    } else{
-      printNan(p,0);
-    }
-        
-    //////////// do R1 ///////////////    
-        
-    mkDesign(p);
-    p_sCg(p);
-    //resue coefs from R0, just remove the terms not used in this model
-       
-    // remove fourth column from design - column counting delta1
-    rmPos(p->start,3,p->covs->dy+5+1);
-    rmCol(p->design,3);
+      
+      if(p->useM0R0){
+	
+	mkDesign(p);
+	p_sCg(p);
+	
+	Matrix<double>* expD = expectedDesign(p);    
+	
+	if(p->regression==0){
+#ifdef EIGEN
+	  tmp = getFit2(p->start,p->ys,expD->d,NULL,expD->dx,expD->dy,-1);
+#else
+	  tmp = getFit(p->start,p->ys,expD->d,NULL,expD->dx,expD->dy,-1);
+#endif      
+	} else{
+#ifdef EIGEN
+	  tmp = getFitBin2(p->start,p->ys,expD->d,NULL,expD->dx,expD->dy,-1);
+#else
+	  tmp = getFitBin(p->start,p->ys,expD->d,NULL,expD->dx,expD->dy,-1);
+#endif      
+	}
 
-    // remove fifth column from design (now fourth because fifth column was removed) - delta2
-    rmPos(p->start,3,p->covs->dy+4+1);
-    rmCol(p->design,3);
-     
+	if(maf0 && maf1){
+	  controlEM(p);
+	  printRes(p,0); 
+	} else{
+	  printNan(p,0);
+	}
+	
+	kill(expD);
+		
+      }
+      
+      if(not p->useM0R0){ 
+	
+	mkDesign(p);
+	p_sCg(p);
+	
+	Matrix<double>* expD = expectedDesign(p);    
+	
+	if(p->regression==0){
+#ifdef EIGEN
+	  tmp = getFit2(p->start,p->ys,expD->d,NULL,expD->dx,expD->dy,-1);
+#else
+	  tmp = getFit(p->start,p->ys,expD->d,NULL,expD->dx,expD->dy,-1);
+#endif      
+	} else{
+#ifdef EIGEN
+	  tmp = getFitBin2(p->start,p->ys,expD->d,NULL,expD->dx,expD->dy,-1);
+#else
+	  tmp = getFitBin(p->start,p->ys,expD->d,NULL,expD->dx,expD->dy,-1);
+#endif      
+	}
+	
+	kill(expD);		
+	
+      } else{
+        
+	//////////// do R1 ///////////////    
+        
+	mkDesign(p);
+	p_sCg(p);
+	//resue coefs from R0, just remove the terms not used in this model
+	
+	// remove fourth column from design - column counting delta1
+	rmPos(p->start,3,p->covs->dy+5+1);
+	rmCol(p->design,3);
+	
+	// remove fifth column from design (now fourth because fifth column was removed) - delta2
+	rmPos(p->start,3,p->covs->dy+4+1);
+	rmCol(p->design,3);
+	
+      }
+      
     if(maf0 && maf1){
       controlEM(p);
       printRes(p,3); 
@@ -1363,7 +1506,7 @@ void asamEM(pars *p){
     }
     
     double* saveStartRec = p->start;
-
+       
     //////////// do R2 ///////////////
     //remove column2 and second value from start M2    
     
