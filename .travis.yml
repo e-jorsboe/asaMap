@@ -1,0 +1,32 @@
+sudo: false
+
+os: linux
+dist: trusty
+
+language: c
+
+compiler:  
+  - gcc
+
+env:
+  global:
+    - MAKEFLAGS="-O3"
+
+matrix:
+  include:
+    # An unoptimised C99 build, for detecting non-static inline functions
+    - compiler: gcc
+      env:
+        - CFLAGS="-std=gnu99 -O0"
+        - CXXFLAGS="-O0"
+
+addons:
+  apt:
+    packages:
+      - lz      
+
+before_script:
+  
+script:
+  - make
+  - make test
