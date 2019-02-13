@@ -52,3 +52,7 @@ asaMap: $(OBJ)
 
 clean:
 	rm  -f *.o *.d asaMap *~
+
+test:
+	echo "test is being run"
+	cd fortest; ./testAll.sh ../asaMap
