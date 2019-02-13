@@ -38,7 +38,7 @@ if [ ! "$res1" = "$res1new"  ] ;then
     RVAL=1
 fi
 
-res2=235.326584
+res2=235.326567
 
 if [ ! "$res2" = "$res2new"  ] ;then
     echo "--------------"
