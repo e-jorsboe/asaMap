@@ -23,7 +23,7 @@ matrix:
 addons:
   apt:
     packages:
-      - lz      
+      - libz      
 
 before_script:
   
