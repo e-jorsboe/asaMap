@@ -23,7 +23,8 @@ matrix:
 addons:
   apt:
     packages:
-      - libz      
+      - liblzma-dev
+      - libbz2-dev      
 
 before_script:
   
