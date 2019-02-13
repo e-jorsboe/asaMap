@@ -309,7 +309,10 @@ int getFitBin(double* start, double* Y, double** covMatrix, double* weights, int
   std::vector<double> w(nIndW);
   std::vector<double> Xt_y(nEnv);
   std::vector<double> invXtX_Xt_y(nEnv);  
-  double XtX[nEnv*nEnv] = {0};
+  double XtX[nEnv*nEnv];
+
+  for(int i=0;i<nEnv*nEnv;i++)
+    XtX[i]=0;
   
   // we run this 20 times...
    for(int t=0;t<20;t++){
