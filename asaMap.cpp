@@ -88,6 +88,7 @@ int getFit(double* start, double* Y, double** covMatrix, double* weights, int nI
 
    // doing inv((X)^T*W*X)
    int singular = svd_inverse(XtX, nEnv, nEnv);
+   
    if(singular){
      return(-9);
    }
@@ -101,7 +102,7 @@ int getFit(double* start, double* Y, double** covMatrix, double* weights, int nI
      fprintf(stderr,"\n");
    } 
 #endif
-
+   
    std::vector<double> Xt_y(nEnv);
    std::vector<double> invXtX_Xt_y(nEnv);
       
@@ -863,30 +864,58 @@ Matrix<double>* expectedDesign(pars *p){
   
   expectedMatrix->dx=sites;
   expectedMatrix->dy=columns;
-  
-  //set matrix to 0?
-  for(size_t i=0;i<sites;i++)
-    for(size_t j=0;j<columns;j++)
-      expectedMatrix->d[i][j] = 0;
-  
-  
-  for(int i=0;i<p->len;i++){
-    for(int n=0;n<3;n++){
-      for(int j=0;j<4;j++){
-	
- 	// we have to create matrix with 4 identical rows
-	expectedMatrix->d[i][n] += pat[p->model][n][j][p->gs[i]]*p->p_sCg[i*4+j];
 
+  if(p->model==0){
+  
+    //set matrix to 0?
+    for(size_t i=0;i<sites;i++)
+      for(size_t j=0;j<columns;j++)
+	expectedMatrix->d[i][j] = 0;
+    
+    
+    for(int i=0;i<p->len;i++){
+      for(int n=0;n<3;n++){
+	for(int j=0;j<4;j++){	  
+	  // we have to create matrix with 4 identical rows
+	  expectedMatrix->d[i][n] += pat[p->model][n][j][p->gs[i]]*p->p_sCg[i*4+j];	  
+	}
+      }
+      
+      if(p->useM0R0){
+	for(int c=0;c<p->covs->dy;c++)
+	  expectedMatrix->d[i][3+c] = p->covs->d[i][c];
+      } else{
+	for(int c=0;c<p->covs->dy;c++)
+	  expectedMatrix->d[i][2+c] = p->covs->d[i][c];      
       }
     }
-
-    if(p->useM0R0){
-      for(int c=0;c<p->covs->dy;c++)
-	expectedMatrix->d[i][3+c] = p->covs->d[i][c];
-    } else{
-      for(int c=0;c<p->covs->dy;c++)
-	expectedMatrix->d[i][2+c] = p->covs->d[i][c];      
+    
+  } else{
+    
+    //set matrix to 0?
+    for(size_t i=0;i<sites;i++)
+      for(size_t j=0;j<columns;j++)
+	expectedMatrix->d[i][j] = 0;
+    
+    
+    for(int i=0;i<p->len;i++){
+      for(int n=0;n<5;n++){
+	for(int j=0;j<4;j++){	  
+	  // we have to create matrix with 4 identical rows
+	  expectedMatrix->d[i][n] += pat[p->model][n][j][p->gs[i]]*p->p_sCg[i*4+j];	  
+	}
+      }
+      
+      if(p->useM0R0){
+	for(int c=0;c<p->covs->dy;c++)
+	  expectedMatrix->d[i][5+c] = p->covs->d[i][c];
+      } else{
+	//because R1 has 2 fewer terms than R0
+	for(int c=0;c<p->covs->dy;c++)
+	  expectedMatrix->d[i][3+c] = p->covs->d[i][c];      
+      }
     }
+    
   }
   
   return(expectedMatrix);
