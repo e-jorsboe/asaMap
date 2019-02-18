@@ -7,6 +7,7 @@
 
 void wrap(const plink *p,const std::vector<double> &phe,const std::vector<double> &ad,Matrix<double> &freq,int model,std::vector<double> start,Matrix<double> &cov,int,double,std::vector<char*> &loci,int nThreads,FILE* outFile, FILE* logFile, int regression, int estSE, int useM0R0);
 
+
 /*
   Below is the pars.
   This will contain all data needed for analyzing one site.
@@ -16,6 +17,7 @@ void wrap(const plink *p,const std::vector<double> &phe,const std::vector<double
   We assume no missing data (samples are filteret in the set_pars)
 
 */
+
 
 typedef struct{
   int len; //length
@@ -28,17 +30,13 @@ typedef struct{
   double *start;//start. Initialized as long as len. Just to be sure.
   double *mafs;//freqs <- this is never allocated but points to the Matrix<double> freq;
   double *SE;//has standard error of estimates
-  int model;// 0=add 1=
+  int model;// 0=add 1=rec
   int quant;
   int regression;
   int estSE;
   int useM0R0;
   int maxIter;
   double tol;
-  int doOptim;
-  int retPrior;
-  int doLean;
-  double *res;//should contain the per site results. Takes from Line this is a double[47]
   int index; //which site it is
   
   //tmp structs to avoid overusing stack
@@ -50,4 +48,8 @@ typedef struct{
   kstring_t bufstr;
   kstring_t tmpstr;
 }pars;
+
+
+
+
 

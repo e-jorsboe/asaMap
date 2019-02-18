@@ -1,6 +1,6 @@
 FLAGS=-O3 
 
-LIBS= -lz
+LIBS= -lz -lpthread
 
 ## Example of make with EIGEN
 ## make WITH_EIGEN=1 EIGEN_PATH=/home/emil/software/eigen-eigen-5a0156e40feb/

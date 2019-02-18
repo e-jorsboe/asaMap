@@ -1789,7 +1789,7 @@ void asamEM(pars *p){
   }  
 }
 
-void main_anal(void *pp){
+void main_analysis(void *pp){
   asamEM((pars*) pp);
   
 }
