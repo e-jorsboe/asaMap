@@ -19,6 +19,10 @@ bool myresSort (myres a,myres b){
   return a.index<b.index;
 }
 
+// how many sites analysed in threaded mode
+int analysedThreadSites = 0;
+int parsedThreadSites = 0;
+
 void kill_pars(pars *p,size_t l){
   
   delete [] p->gs;
@@ -123,7 +127,7 @@ void rstart(double *ary,size_t l, const std::vector<double> &phe, double fMin, d
   ary[l]=sd(phe);
 }
 
-pars *init_pars(size_t l,size_t ncov,int model,int maxInter,double tole,std::vector<double> &start, const std::vector<double> &phe, int regression, FILE* logFile, int estSE, int useM0R0){
+pars *init_pars(size_t l,size_t ncov,int model,int maxInter,double tole,std::vector<double> &start, const std::vector<double> &phe, int regression, FILE* logFile, int estSE, int useM0R0, int header){
   
   pars *p=new pars;
   p->len=l;
@@ -150,14 +154,16 @@ pars *init_pars(size_t l,size_t ncov,int model,int maxInter,double tole,std::vec
   if(model==0){
     // for the add model where design matrix has B1, B2, A1, covs
     // start has the same + sd(y) - so one longer than row in design matrix
-    if(estSE and useM0R0){
-      ksprintf(&p->bufstr,"Chromo\tPosition\tnInd\tf1\tf2\tllh(M0)\tllh(M1)\tllh(M2)\tllh(M3)\tllh(M4)\tllh(M5)\tb1(M1)\tb2(M1)\tSE(b1(M1))\tSE(b2(M1))\tb1(M2)\tSE(b1(M2))\tb2(M3)\tSE(b2(M3))\tb(M4)\tSE(b(M4))\n");      
-    } else if(estSE){
-      ksprintf(&p->bufstr,"Chromo\tPosition\tnInd\tf1\tf2\tllh(M1)\tllh(M2)\tllh(M3)\tllh(M4)\tllh(M5)\tb1(M1)\tb2(M1)\tSE(b1(M1))\tSE(b2(M1))\tb1(M2)\tSE(b1(M2))\tb2(M3)\tSE(b2(M3))\tb(M4)\tSE(b(M4))\n");            
-    } else if(useM0R0){
-      ksprintf(&p->bufstr,"Chromo\tPosition\tnInd\tf1\tf2\tllh(M0)\tllh(M1)\tllh(M2)\tllh(M3)\tllh(M4)\tllh(M5)\tb1(M1)\tb2(M1)\tb1(M2)\tb2(M3)\tb(M4)\n");      
-    } else{
-      ksprintf(&p->bufstr,"Chromo\tPosition\tnInd\tf1\tf2\tllh(M1)\tllh(M2)\tllh(M3)\tllh(M4)\tllh(M5)\tb1(M1)\tb2(M1)\tb1(M2)\tb2(M3)\tb(M4)\n");
+    if(header){
+      if(estSE and useM0R0){
+	ksprintf(&p->bufstr,"Chromo\tPosition\tnInd\tf1\tf2\tllh(M0)\tllh(M1)\tllh(M2)\tllh(M3)\tllh(M4)\tllh(M5)\tb1(M1)\tb2(M1)\tSE(b1(M1))\tSE(b2(M1))\tb1(M2)\tSE(b1(M2))\tb2(M3)\tSE(b2(M3))\tb(M4)\tSE(b(M4))\n");      
+      } else if(estSE){
+	ksprintf(&p->bufstr,"Chromo\tPosition\tnInd\tf1\tf2\tllh(M1)\tllh(M2)\tllh(M3)\tllh(M4)\tllh(M5)\tb1(M1)\tb2(M1)\tSE(b1(M1))\tSE(b2(M1))\tb1(M2)\tSE(b1(M2))\tb2(M3)\tSE(b2(M3))\tb(M4)\tSE(b(M4))\n");            
+      } else if(useM0R0){
+	ksprintf(&p->bufstr,"Chromo\tPosition\tnInd\tf1\tf2\tllh(M0)\tllh(M1)\tllh(M2)\tllh(M3)\tllh(M4)\tllh(M5)\tb1(M1)\tb2(M1)\tb1(M2)\tb2(M3)\tb(M4)\n");      
+      } else{
+	ksprintf(&p->bufstr,"Chromo\tPosition\tnInd\tf1\tf2\tllh(M1)\tllh(M2)\tllh(M3)\tllh(M4)\tllh(M5)\tb1(M1)\tb2(M1)\tb1(M2)\tb2(M3)\tb(M4)\n");
+      }
     }
 
     // also has to have intercept
@@ -171,15 +177,17 @@ pars *init_pars(size_t l,size_t ncov,int model,int maxInter,double tole,std::vec
   } else{
     // for the add model where design matrix has R1, R2, Rm, delta1, delta2, covs (delta: rec for other allele - A)
     // start has the same + sd(y) - so one longer than row in design matrix
-    
-    if(estSE and useM0R0){
-      ksprintf(&p->bufstr,"Chromo\tPosition\tnInd\tf1\tf2\tllh(R0)\tllh(R1)\tllh(R2)\tllh(R3)\tllh(R4)\tllh(R5)\tllh(R6)\tllh(R7)\tb1(R1)\tb2(R1)\tbm(R1)\tSE(b1(R1))\tSE(b2(R1))\tSE(bm(R1))\tb1(R2)\tb2m(R2)\tSE(b1(R2))\tSE(b2m(R2))\tb1m(R3)\tb2(R3)\tSE(b1m(R3))\tSE(b2(R3))\tb1(R4)\tSE(b1(R4))\tb2(R5)\tSE(b2(R5))\tb(R6)\tSE(b(R6))\n");
-    } else if(estSE){
-      ksprintf(&p->bufstr,"Chromo\tPosition\tnInd\tf1\tf2\tllh(R1)\tllh(R2)\tllh(R3)\tllh(R4)\tllh(R5)\tllh(R6)\tllh(R7)\tb1(R1)\tb2(R1)\tbm(R1)\tSE(b1(R1))\tSE(b2(R1))\tSE(bm(R1))\tb1(R2)\tb2m(R2)\tSE(b1(R2))\tSE(b2m(R2))\tb1m(R3)\tb2(R3)\tSE(b1m(R3))\tSE(b2(R3))\tb1(R4)\tSE(b1(R4))\tb2(R5)\tSE(b2(R5))\tb(R6)\tSE(b(R6))\n");
-    } else if(useM0R0){
-      ksprintf(&p->bufstr,"Chromo\tPosition\tnInd\tf1\tf2\tllh(R0)\tllh(R1)\tllh(R2)\tllh(R3)\tllh(R4)\tllh(R5)\tllh(R6)\tllh(R7)\tb1(R1)\tb2(R1)\tbm(R1)\tb1(R2)\tb2m(R2)\tb1m(R3)\tb2(R3)\tb1(R4)\tb2(R5)\tb(R6)\n");
-    } else{
-      ksprintf(&p->bufstr,"Chromo\tPosition\tnInd\tf1\tf2\tllh(R1)\tllh(R2)\tllh(R3)\tllh(R4)\tllh(R5)\tllh(R6)\tllh(R7)\tb1(R1)\tb2(R1)\tbm(R1)\tb1(R2)\tb2m(R2)\tb1m(R3)\tb2(R3)\tb1(R4)\tb2(R5)\tb(R6)\n");
+
+    if(header){
+      if(estSE and useM0R0){
+	ksprintf(&p->bufstr,"Chromo\tPosition\tnInd\tf1\tf2\tllh(R0)\tllh(R1)\tllh(R2)\tllh(R3)\tllh(R4)\tllh(R5)\tllh(R6)\tllh(R7)\tb1(R1)\tb2(R1)\tbm(R1)\tSE(b1(R1))\tSE(b2(R1))\tSE(bm(R1))\tb1(R2)\tb2m(R2)\tSE(b1(R2))\tSE(b2m(R2))\tb1m(R3)\tb2(R3)\tSE(b1m(R3))\tSE(b2(R3))\tb1(R4)\tSE(b1(R4))\tb2(R5)\tSE(b2(R5))\tb(R6)\tSE(b(R6))\n");
+      } else if(estSE){
+	ksprintf(&p->bufstr,"Chromo\tPosition\tnInd\tf1\tf2\tllh(R1)\tllh(R2)\tllh(R3)\tllh(R4)\tllh(R5)\tllh(R6)\tllh(R7)\tb1(R1)\tb2(R1)\tbm(R1)\tSE(b1(R1))\tSE(b2(R1))\tSE(bm(R1))\tb1(R2)\tb2m(R2)\tSE(b1(R2))\tSE(b2m(R2))\tb1m(R3)\tb2(R3)\tSE(b1m(R3))\tSE(b2(R3))\tb1(R4)\tSE(b1(R4))\tb2(R5)\tSE(b2(R5))\tb(R6)\tSE(b(R6))\n");
+      } else if(useM0R0){
+	ksprintf(&p->bufstr,"Chromo\tPosition\tnInd\tf1\tf2\tllh(R0)\tllh(R1)\tllh(R2)\tllh(R3)\tllh(R4)\tllh(R5)\tllh(R6)\tllh(R7)\tb1(R1)\tb2(R1)\tbm(R1)\tb1(R2)\tb2m(R2)\tb1m(R3)\tb2(R3)\tb1(R4)\tb2(R5)\tb(R6)\n");
+      } else{
+	ksprintf(&p->bufstr,"Chromo\tPosition\tnInd\tf1\tf2\tllh(R1)\tllh(R2)\tllh(R3)\tllh(R4)\tllh(R5)\tllh(R6)\tllh(R7)\tb1(R1)\tb2(R1)\tbm(R1)\tb1(R2)\tb2m(R2)\tb1m(R3)\tb2(R3)\tb1(R4)\tb2(R5)\tb(R6)\n");
+      }
     }
         
     // also has to have intercept
@@ -271,8 +279,6 @@ void check_pars(pars* p, const std::vector<double> &phe, Matrix<double> &cov){
   
 }
 
-
-
 void set_pars(pars *p, char *g,const std::vector<double> &phe, const std::vector<double> &ad, double *freq, std::vector<double> start, Matrix<double> &cov, char *site, int y){
   
   // because has to count up how many individuals analysed for this site - due to missing genotypes
@@ -320,73 +326,45 @@ void set_pars(pars *p, char *g,const std::vector<double> &phe, const std::vector
   ksprintf(&p->bufstr,"%s%d\t%f\t%f\t",site,p->len,p->mafs[0],p->mafs[1]);
 }
 
-
-
 void *main_analysis_thread(void* threadarg){
 
   worker_args * td;
   td = ( worker_args * ) threadarg;
 
-  fprintf(stderr,"THREAT %i\n",td->i);
-  fprintf(stderr,"THREAT first %i %i\n",td->first,td->second);
-
-  fprintf(stderr,"nSites %i\n",td->nSites);
+  fprintf(stderr,"Thread %i started\n",td->i);
   
   for(int i=td->first;i<td->second;i++){
 
     //if last block has sites with values larger than nSites
     if(i>=td->nSites){
-      fprintf(stderr,"HERE????");
       pthread_exit(NULL);
     }
     
     // parsing site with index 100 (0-indexed so 101th site) - but will have parsed 100 sites
-    if(i % 100==0){
-      fprintf(stderr,"Parsed sites:%d\n",i);
+    if(parsedThreadSites % 100==0){
+      fprintf(stderr,"Parsed sites:%i\n",parsedThreadSites);
     }
-            
-    //emil
-    //fprintf(stderr,"Howdy!\n");
-    fprintf(stderr,"Thread %i\n",i);
-        
-    //fprintf(stderr,"Howdy %c %c\n",td->d[0][0],td->d[0][1]);
-    //fprintf(stderr,"Howdy %i %i\n",td->d[0][0],td->d[0][1]);
-    //  fprintf(stderr,"nSites %i\n",td->p->len);
+    parsedThreadSites++;
     
+               
     int cats2[4] = {0,0,0,0};
     
     for(int x=0;x<td->p->len;x++){//similar to above but with transposed plink matrix
-      //emil
-      //fprintf(stderr,"Howdy2 %i %i\n",whichSite,x);
-      //emil
       cats2[td->d[i][x]]++;
     }
-
-    fprintf(stderr,"Here %i\n",i);
-    
-    //fprintf(stderr,"Site1: %i\n",i);
-    //emil
-    //fprintf(stderr,"Howdy3!\n");
-    
-    //discard sites if missingness > 0.1
-
-    //emil
         
     if((cats2[3]/(double)(cats2[0]+cats2[1]+cats2[2]))>0.1){
       fprintf(stderr,"skipping site[%d] due to excess missingness\n",i);
       continue;
     }
         
-    //fprintf(stderr,"Site2: %i\n",i);
     //check that we observe atleast 10 obs of 2 different genotypes
     int n=0;
     
     // changed i to 3, as we do not want to consider missing geno a different genotype
     for(int j=0;j<3;j++)
       if(cats2[j]>1)
-	n++;
-    
-    //emil
+	n++;    
     
     // checks that there are at least 2 different genos (1 might be missing)
     if(n<2){
@@ -394,37 +372,15 @@ void *main_analysis_thread(void* threadarg){
       continue;
     }
         
-    //fprintf(stderr,"Site3: %i\n",i);
-
-    //fprintf(stderr,"Start0\n");
-    //fprintf(stderr,"Start1: %f %f %f\n",td->start[0],td->start[1],td->start[2]);
-
-    //fprintf(stderr,"PARS %p, THREAT %i, FREQ %p, PHE %p\n",td->p,td->i,td->freq,&td->phe);
-    
     set_pars(td->p,td->d[i],td->phe,td->ad,td->freq.d[i],td->start,td->cov,td->loci[i],td->i);
-
-    //fprintf(stderr,"PARS %p, THREAT %i, FREQ %p, PHE %p\n",td->p,td->i,td->freq,&td->phe);
-    
-    //fprintf(stderr,"Start2: %f %f %f\n",td->p->start[0],td->p->start[1],td->p->start[2]);
-    //fprintf(stderr,"Cov2: %f %f %f\n",td->p->covs->d[0][0],td->p->covs->d[0][1],td->p->covs->d[0][2]);
-    //fprintf(stderr,"Pheno2: %f %f %f\n",td->p->start[0],td->p->start[1],td->p->start[2]);
-    //fprintf(stderr,"p_sCg2: %f %f %f\n",td->p->p_sCg[0],td->p->p_sCg[1],td->p->p_sCg[2]);
-    //fprintf(stderr,"weights2: %f %f %f\n",td->p->weights[0],td->p->weights[1],td->p->weights[2]);
-    
-    //emil
-    //fprintf(stderr,"Howdy!\n");
-    //fprintf(stderr,"Howdy:%i\n",td->p->len);
-    //fprintf(stderr,"Index: %i, site: %i\n",td->p->index,whichSite);
-    
+       
     main_analysis((void*)td->p);
     
     fprintf(td->tmpFile,"%s\t%s\n",td->p->bufstr.s,td->p->tmpstr.s);
-    //emil
-    //fflush(td->tmpFile);
     td->p->bufstr.l=td->p->tmpstr.l=0;
 
     char buf[4096];
-    snprintf(buf,4096,"%s\t%s\n",td->p->bufstr.s,td->p->tmpstr.s);
+    snprintf(buf,4096,"%s\t%s",td->p->bufstr.s,td->p->tmpstr.s);
 
     myres tmp;
     
@@ -434,8 +390,7 @@ void *main_analysis_thread(void* threadarg){
     // push_back
     myresults.push_back(tmp);
 
-    fprintf(stderr,"size %i\n",myresults.size());
-    fprintf(stderr,"res %s\n",myresults[0].res);
+    analysedThreadSites++;
     
   }
  
@@ -457,25 +412,29 @@ void wrap(const plink *plnk,const std::vector<double> &phe,const std::vector<dou
   if(nThreads==1){
     
     //we prep for threading. By using encapsulating all data need for a site in struct called pars
-    pars *p=init_pars(plnk->x,cov.dy,model,maxIter,tol,start,phe,regression,logFile,estSE,useM0R0);
+    pars *p=init_pars(plnk->x,cov.dy,model,maxIter,tol,start,phe,regression,logFile,estSE,useM0R0,1);
     
     // check that pheno and covariates are OK
     check_pars(p, phe, cov);
     
     // print starting values!!
     if(p->model==0){
-      fprintf(stderr,"Starting values are:\t"); fprintf(logFile,"Starting values are:\t");
+      fprintf(stderr,"Starting values are:\t");
+      fprintf(logFile,"Starting values are:\t");
       // starting values equal to covs + 4 (3 for add columns + sd(y) column)
       for(int i=0;i<p->ncov+4;i++){
-	fprintf(stderr, "%f ",p->start[i]); fprintf(logFile, "%f ",p->start[i]);
+	fprintf(stderr, "%f ",p->start[i]);
+	fprintf(logFile, "%f ",p->start[i]);
       }
       fprintf(stderr,"\n"); fprintf(logFile,"\n");      
     } else{
       // if rec model - copy all starting values ncov + 6
-      fprintf(stderr,"Starting values are:\t"); fprintf(logFile,"Starting values are:\t");
+      fprintf(stderr,"Starting values are:\t");
+      fprintf(logFile,"Starting values are:\t");
       // starting values equal to covs + 6 (5 for rec columns + sd(y) column)
       for(int i=0;i<p->ncov+6;i++){
-	fprintf(stderr, "%f ",p->start[i]); fprintf(logFile, "%f ",p->start[i]);
+	fprintf(stderr, "%f ",p->start[i]);
+	fprintf(logFile, "%f ",p->start[i]);
       }
       fprintf(stderr,"\n"); fprintf(logFile,"\n");      
     }
@@ -542,19 +501,21 @@ void wrap(const plink *plnk,const std::vector<double> &phe,const std::vector<dou
     
     int NumJobs = plnk->y;
     // has to read all parameters/data into this struct
-
     
     double blockd = NumJobs/(double) nThreads;
     // so the blocks are at least a little too big,
     // meaning last block might be a bit smaller
     int block = ceil(blockd);
-
-    fprintf(stderr,"NumJobs %i, block %i, blockd %f\n",NumJobs,block,blockd);
     
     pars **all_pars = new pars*[nThreads];
 
     for(int i=0;i<nThreads;i++){
-      all_pars[i]=init_pars(plnk->x,cov.dy,model,maxIter,tol,start,phe,regression,logFile,estSE,useM0R0);
+      if(i==0){
+	all_pars[i]=init_pars(plnk->x,cov.dy,model,maxIter,tol,start,phe,regression,logFile,estSE,useM0R0,1);
+      } else{
+	all_pars[i]=init_pars(plnk->x,cov.dy,model,maxIter,tol,start,phe,regression,logFile,estSE,useM0R0,0);
+      }
+
     }
 
     worker_args **all_args = new worker_args*[nThreads];
@@ -578,6 +539,30 @@ void wrap(const plink *plnk,const std::vector<double> &phe,const std::vector<dou
     }
     
     pthread_t thread1[nThreads];
+
+    
+    // prints starting values
+    if(all_pars[0]->model==0){
+      fprintf(stderr,"Starting values are:\t");
+      fprintf(logFile,"Starting values are:\t");
+      // starting values equal to covs + 4 (3 for add columns + sd(y) column)
+      for(int i=0;i<all_pars[0]->ncov+4;i++){
+	fprintf(stderr, "%f ",all_pars[0]->start[i]);
+	fprintf(logFile, "%f ",all_pars[0]->start[i]);
+      }
+      fprintf(stderr,"\n"); fprintf(logFile,"\n");      
+    } else{
+      // if rec model - copy all starting values ncov + 6
+      fprintf(stderr,"Starting values are:\t");
+      fprintf(logFile,"Starting values are:\t");
+      // starting values equal to covs + 6 (5 for rec columns + sd(y) column)
+      for(int i=0;i<all_pars[0]->ncov+6;i++){
+	fprintf(stderr, "%f ",all_pars[0]->start[i]);
+	fprintf(logFile, "%f ",all_pars[0]->start[i]);
+      }
+      fprintf(stderr,"\n"); fprintf(logFile,"\n");      
+    }
+
     
     // this has to be threaded version of main_analysis
     for (int i = 0; i < nThreads; i++)
@@ -587,11 +572,20 @@ void wrap(const plink *plnk,const std::vector<double> &phe,const std::vector<dou
     for (int i = 0; i < nThreads; i++)
       assert(pthread_join(thread1[i], NULL)==0);
     
-    //std::sort(myresults.begin(),myresults.end(),myresSort);
+    std::sort(myresults.begin(),myresults.end(),myresSort);
     
     for(int i=0;i<myresults.size();i++){
-      fprintf(stderr,"%i\n",i);
       fprintf(outFile,"%s\n",myresults[i].res);
+    }
+    
+    // write how many sites analysed 
+    fprintf(stderr,"Number of analysed sites is:\t %i\n",analysedThreadSites);
+    fprintf(logFile,"Number of analysed sites is:\t %i\n",analysedThreadSites);
+   
+    for(int i=0;i<nThreads;i++){
+      fclose(all_args[i]->tmpFile);
+      unlink(all_args[i]->tmpFileName);
+      free(all_args[i]->tmpFileName);
     }
     
   }
