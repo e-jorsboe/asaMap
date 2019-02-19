@@ -1323,7 +1323,7 @@ void asamEM(pars *p){
     }  else{
       printNan(p,1);
     }
-         
+    
     //////////// do M3 ///////////////
     //remove column1 and first value from start M2   
     
@@ -1409,7 +1409,7 @@ void asamEM(pars *p){
     p->start[2]=p->start[1]=0;
    
     //print to kbuf
-    printRes(p,1); 
+    printRes(p,1);
     
     //////////// do M5 ///////////////  
     //cpy covs to design    
@@ -1790,8 +1790,7 @@ void asamEM(pars *p){
 }
 
 void main_analysis(void *pp){
-  asamEM((pars*) pp);
-  
+  asamEM((pars*) pp);  
 }
 
 #if __WITH_MAIN__

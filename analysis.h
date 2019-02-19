@@ -5,7 +5,7 @@
 #include "readplink.h"
 #include "kstring.h"
 
-void wrap(const plink *p,const std::vector<double> &phe,const std::vector<double> &ad,Matrix<double> &freq,int model,std::vector<double> start,Matrix<double> &cov,int,double,std::vector<char*> &loci,int nThreads,FILE* outFile, FILE* logFile, int regression, int estSE, int useM0R0);
+void wrap(const plink *p,const std::vector<double> &phe,const std::vector<double> &ad,Matrix<double> &freq,int model,std::vector<double> start,Matrix<double> &cov,int,double,std::vector<char*> &loci,int nThreads,FILE* outFile, FILE* logFile, int regression, int estSE, int useM0R0, char* outname);
 
 
 /*

@@ -236,7 +236,7 @@ int main(int argc,char **argv){
   // flush to disk - or force to write to disk 
   fflush(logFile);
   
-  wrap(p,pheno,adprop,f,model,s,cov,mIter,tol,loci,nThreads,outFile,logFile,regression,estSE,useM0R0);
+  wrap(p,pheno,adprop,f,model,s,cov,mIter,tol,loci,nThreads,outFile,logFile,regression,estSE,useM0R0,outname);
 
   //cleanup
   kill_plink(p);

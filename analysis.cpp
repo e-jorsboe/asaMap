@@ -1,15 +1,26 @@
 #include <cmath>
+#include <algorithm> 
 #include "readplink.c"
 #include "analysis.h"
 #include "asaMap.h"
 #include "analysisFunction.h"
 #include <pthread.h>
 
-int whichSite = 0;
-pthread_mutex_t mutex1 = PTHREAD_MUTEX_INITIALIZER;
+typedef struct{
+  int index; //site 
+  char *res; //<-results as char*
+}myres;
 
+
+// results in vector
+std::vector<myres> myresults;
+
+bool myresSort (myres a,myres b){  
+  return a.index<b.index;
+}
 
 void kill_pars(pars *p,size_t l){
+  
   delete [] p->gs;
   delete [] p->ys;
   delete [] p->qvec;
@@ -28,11 +39,14 @@ void kill_pars(pars *p,size_t l){
   free(p->bufstr.s);free(p->tmpstr.s);
   delete p;  
   p=NULL;
+  
 }
 
 
 struct worker_args_t{
 
+  int first;
+  int second;
   pars* p;  
   char** d;//covs is a design matrix.
   std::vector<double> phe;
@@ -42,24 +56,24 @@ struct worker_args_t{
   Matrix<double> cov;
   std::vector<char*> loci;
   int i;
-  FILE* outFile;
+  FILE* tmpFile;
+  char* tmpFileName;
   int nSites;
 
-  worker_args_t(pars* p1,char** d1,std::vector<double> phe1,std::vector<double> ad1,std::vector<double> start1,Matrix<double> &freq1,Matrix<double> &cov1,std::vector<char*> loci1,int &i1, FILE* outFile1){
-    
+  // construct for worker_args_t struct
+  worker_args_t(int &first1,int &second1,pars* p1,char** d1,std::vector<double> phe1,std::vector<double> ad1,std::vector<double> start1,Matrix<double> &freq1,Matrix<double> &cov1,std::vector<char*> loci1,int &i1){
+
+    first=first1;
+    second=second1;
     p=p1;
-
     d=d1;
-
     phe=phe1;
     ad=ad1;
     start=start1;
     freq=freq1;
-
     cov=cov1;
     loci=loci1;
     i=i1;
-    outFile=outFile1;
     nSites=freq.dx;
     
   }
@@ -110,6 +124,7 @@ void rstart(double *ary,size_t l, const std::vector<double> &phe, double fMin, d
 }
 
 pars *init_pars(size_t l,size_t ncov,int model,int maxInter,double tole,std::vector<double> &start, const std::vector<double> &phe, int regression, FILE* logFile, int estSE, int useM0R0){
+  
   pars *p=new pars;
   p->len=l;
   // also intercept (which is not specified)
@@ -166,11 +181,10 @@ pars *init_pars(size_t l,size_t ncov,int model,int maxInter,double tole,std::vec
     } else{
       ksprintf(&p->bufstr,"Chromo\tPosition\tnInd\tf1\tf2\tllh(R1)\tllh(R2)\tllh(R3)\tllh(R4)\tllh(R5)\tllh(R6)\tllh(R7)\tb1(R1)\tb2(R1)\tbm(R1)\tb1(R2)\tb2m(R2)\tb1m(R3)\tb2(R3)\tb1(R4)\tb2(R5)\tb(R6)\n");
     }
-    
-    
+        
     // also has to have intercept
     p->design=initMatrix(4*l,ncov+5);    
-  // this one has one starting guess for 5 coefs and covar + sd at the end, index ncov+6
+    // this one has one starting guess for 5 coefs and covar + sd at the end, index ncov+6
     p->start = new double[ncov+6];
     p->start0 = new double[ncov+6];
     p->SE = new double[ncov+6];
@@ -260,7 +274,7 @@ void check_pars(pars* p, const std::vector<double> &phe, Matrix<double> &cov){
 
 
 void set_pars(pars *p, char *g,const std::vector<double> &phe, const std::vector<double> &ad, double *freq, std::vector<double> start, Matrix<double> &cov, char *site, int y){
-
+  
   // because has to count up how many individuals analysed for this site - due to missing genotypes
   p->len=0;
   for(int i=0;i<phe.size();i++){
@@ -284,7 +298,7 @@ void set_pars(pars *p, char *g,const std::vector<double> &phe, const std::vector
   // add extra covariate of intercept
   p->covs->dy=cov.dy+1;
   p->mafs = freq;
-  p->index = y;
+  p->index = y;  
   
   for(int i=0;i<p->len;i++){
     for(int j=0;j<4;j++){
@@ -301,7 +315,7 @@ void set_pars(pars *p, char *g,const std::vector<double> &phe, const std::vector
   } else{
     // if rec model - copy all starting values ncov + 6
     memcpy(p->start,p->start0,sizeof(double)*(p->covs->dy+6));    
-  }
+  } 
 
   ksprintf(&p->bufstr,"%s%d\t%f\t%f\t",site,p->len,p->mafs[0],p->mafs[1]);
 }
@@ -313,26 +327,28 @@ void *main_analysis_thread(void* threadarg){
   worker_args * td;
   td = ( worker_args * ) threadarg;
 
+  fprintf(stderr,"THREAT %i\n",td->i);
+  fprintf(stderr,"THREAT first %i %i\n",td->first,td->second);
 
-  while(whichSite<td->nSites){
+  fprintf(stderr,"nSites %i\n",td->nSites);
   
-    pthread_mutex_lock(&mutex1);   
-    whichSite++;
-    fprintf(stderr,"Site: %i\n",whichSite);
-    fprintf(stderr,"nSites: %i\n",td->nSites);
-    
-    pthread_mutex_unlock(&mutex1);
+  for(int i=td->first;i<td->second;i++){
+
+    //if last block has sites with values larger than nSites
+    if(i>=td->nSites){
+      fprintf(stderr,"HERE????");
+      pthread_exit(NULL);
+    }
     
     // parsing site with index 100 (0-indexed so 101th site) - but will have parsed 100 sites
-    if(whichSite % 100==0){
-      fprintf(stderr,"Parsed sites:%d\n",whichSite);
+    if(i % 100==0){
+      fprintf(stderr,"Parsed sites:%d\n",i);
     }
             
     //emil
     //fprintf(stderr,"Howdy!\n");
-    //fprintf(stderr,"Thread %i\n",whichSite);
-    
-    
+    fprintf(stderr,"Thread %i\n",i);
+        
     //fprintf(stderr,"Howdy %c %c\n",td->d[0][0],td->d[0][1]);
     //fprintf(stderr,"Howdy %i %i\n",td->d[0][0],td->d[0][1]);
     //  fprintf(stderr,"nSites %i\n",td->p->len);
@@ -342,34 +358,58 @@ void *main_analysis_thread(void* threadarg){
     for(int x=0;x<td->p->len;x++){//similar to above but with transposed plink matrix
       //emil
       //fprintf(stderr,"Howdy2 %i %i\n",whichSite,x);
-      cats2[td->d[whichSite][x]]++;
+      //emil
+      cats2[td->d[i][x]]++;
     }
+
+    fprintf(stderr,"Here %i\n",i);
     
-    fprintf(stderr,"Site1: %i\n",whichSite);
+    //fprintf(stderr,"Site1: %i\n",i);
     //emil
     //fprintf(stderr,"Howdy3!\n");
     
     //discard sites if missingness > 0.1
+
+    //emil
+        
     if((cats2[3]/(double)(cats2[0]+cats2[1]+cats2[2]))>0.1){
-      fprintf(stderr,"skipping site[%d] due to excess missingness\n",whichSite);
-      pthread_exit(NULL);
+      fprintf(stderr,"skipping site[%d] due to excess missingness\n",i);
+      continue;
     }
-    fprintf(stderr,"Site2: %i\n",whichSite);
+        
+    //fprintf(stderr,"Site2: %i\n",i);
     //check that we observe atleast 10 obs of 2 different genotypes
     int n=0;
     
     // changed i to 3, as we do not want to consider missing geno a different genotype
-    for(int i=0;i<3;i++)
-      if(cats2[i]>1)
+    for(int j=0;j<3;j++)
+      if(cats2[j]>1)
 	n++;
+    
+    //emil
+    
     // checks that there are at least 2 different genos (1 might be missing)
     if(n<2){
-      fprintf(stderr,"skipping site[%d] due to categories filter\n",whichSite);
-      pthread_exit(NULL);
+      fprintf(stderr,"skipping site[%d] due to categories filter\n",i);
+      continue;
     }
-    fprintf(stderr,"Site3: %i\n",whichSite);
+        
+    //fprintf(stderr,"Site3: %i\n",i);
+
+    //fprintf(stderr,"Start0\n");
+    //fprintf(stderr,"Start1: %f %f %f\n",td->start[0],td->start[1],td->start[2]);
+
+    //fprintf(stderr,"PARS %p, THREAT %i, FREQ %p, PHE %p\n",td->p,td->i,td->freq,&td->phe);
     
-    set_pars(td->p,td->d[whichSite],td->phe,td->ad,td->freq.d[whichSite],td->start,td->cov,td->loci[whichSite],td->i);
+    set_pars(td->p,td->d[i],td->phe,td->ad,td->freq.d[i],td->start,td->cov,td->loci[i],td->i);
+
+    //fprintf(stderr,"PARS %p, THREAT %i, FREQ %p, PHE %p\n",td->p,td->i,td->freq,&td->phe);
+    
+    //fprintf(stderr,"Start2: %f %f %f\n",td->p->start[0],td->p->start[1],td->p->start[2]);
+    //fprintf(stderr,"Cov2: %f %f %f\n",td->p->covs->d[0][0],td->p->covs->d[0][1],td->p->covs->d[0][2]);
+    //fprintf(stderr,"Pheno2: %f %f %f\n",td->p->start[0],td->p->start[1],td->p->start[2]);
+    //fprintf(stderr,"p_sCg2: %f %f %f\n",td->p->p_sCg[0],td->p->p_sCg[1],td->p->p_sCg[2]);
+    //fprintf(stderr,"weights2: %f %f %f\n",td->p->weights[0],td->p->weights[1],td->p->weights[2]);
     
     //emil
     //fprintf(stderr,"Howdy!\n");
@@ -378,23 +418,33 @@ void *main_analysis_thread(void* threadarg){
     
     main_analysis((void*)td->p);
     
-    pthread_mutex_lock(&mutex1);
-    
-    fprintf(td->outFile,"%s\t%s\n",td->p->bufstr.s,td->p->tmpstr.s);  
+    fprintf(td->tmpFile,"%s\t%s\n",td->p->bufstr.s,td->p->tmpstr.s);
+    //emil
+    //fflush(td->tmpFile);
     td->p->bufstr.l=td->p->tmpstr.l=0;
-    
-    pthread_mutex_unlock(&mutex1);
 
-  }
-  
-  pthread_exit(0);
+    char buf[4096];
+    snprintf(buf,4096,"%s\t%s\n",td->p->bufstr.s,td->p->tmpstr.s);
+
+    myres tmp;
     
-  
+    tmp.index=i;
+    tmp.res=strdup(buf);
+      
+    // push_back
+    myresults.push_back(tmp);
+
+    fprintf(stderr,"size %i\n",myresults.size());
+    fprintf(stderr,"res %s\n",myresults[0].res);
+    
+  }
+ 
+  pthread_exit(0);
+      
 }
 
 
-
-void wrap(const plink *plnk,const std::vector<double> &phe,const std::vector<double> &ad,Matrix<double> &freq,int model,std::vector<double> start,Matrix<double> &cov,int maxIter,double tol,std::vector<char*> &loci,int nThreads,FILE* outFile, FILE* logFile, int regression, int estSE, int useM0R0){
+void wrap(const plink *plnk,const std::vector<double> &phe,const std::vector<double> &ad,Matrix<double> &freq,int model,std::vector<double> start,Matrix<double> &cov,int maxIter,double tol,std::vector<char*> &loci,int nThreads,FILE* outFile, FILE* logFile, int regression, int estSE, int useM0R0,char* outname){
 
   char **d = new char*[plnk->y];//transposed of plink->d. Not sure what is best, if we filterout nonmissing anyway.
   for(int i=0;i<plnk->y;i++){
@@ -402,48 +452,44 @@ void wrap(const plink *plnk,const std::vector<double> &phe,const std::vector<dou
     for(int j=0;j<plnk->x;j++)
       d[i][j]=plnk->d[j][i];
   }
-  
-  //we prep for threading. By using encapsulating all data need for a site in struct called pars
-  pars *p=init_pars(plnk->x,cov.dy,model,maxIter,tol,start,phe,regression,logFile,estSE,useM0R0);
 
-  // check that pheno and covariates are OK
-  check_pars(p, phe, cov);
-  
-  // print starting values!!
-  if(p->model==0){
-    fprintf(stderr,"Starting values are:\t"); fprintf(logFile,"Starting values are:\t");
-    // starting values equal to covs + 4 (3 for add columns + sd(y) column)
-    for(int i=0;i<p->ncov+4;i++){
-      fprintf(stderr, "%f ",p->start[i]); fprintf(logFile, "%f ",p->start[i]);
-    }
-    fprintf(stderr,"\n"); fprintf(logFile,"\n");      
-  } else{
-    // if rec model - copy all starting values ncov + 6
-    fprintf(stderr,"Starting values are:\t"); fprintf(logFile,"Starting values are:\t");
-    // starting values equal to covs + 6 (5 for rec columns + sd(y) column)
-    for(int i=0;i<p->ncov+6;i++){
-      fprintf(stderr, "%f ",p->start[i]); fprintf(logFile, "%f ",p->start[i]);
-    }
-    fprintf(stderr,"\n"); fprintf(logFile,"\n");      
-  }
-
-  int analysedSites = 0;
-
+ 
   if(nThreads==1){
-  
+    
+    //we prep for threading. By using encapsulating all data need for a site in struct called pars
+    pars *p=init_pars(plnk->x,cov.dy,model,maxIter,tol,start,phe,regression,logFile,estSE,useM0R0);
+    
+    // check that pheno and covariates are OK
+    check_pars(p, phe, cov);
+    
+    // print starting values!!
+    if(p->model==0){
+      fprintf(stderr,"Starting values are:\t"); fprintf(logFile,"Starting values are:\t");
+      // starting values equal to covs + 4 (3 for add columns + sd(y) column)
+      for(int i=0;i<p->ncov+4;i++){
+	fprintf(stderr, "%f ",p->start[i]); fprintf(logFile, "%f ",p->start[i]);
+      }
+      fprintf(stderr,"\n"); fprintf(logFile,"\n");      
+    } else{
+      // if rec model - copy all starting values ncov + 6
+      fprintf(stderr,"Starting values are:\t"); fprintf(logFile,"Starting values are:\t");
+      // starting values equal to covs + 6 (5 for rec columns + sd(y) column)
+      for(int i=0;i<p->ncov+6;i++){
+	fprintf(stderr, "%f ",p->start[i]); fprintf(logFile, "%f ",p->start[i]);
+      }
+      fprintf(stderr,"\n"); fprintf(logFile,"\n");      
+    }
+    
+    // counts number of sites actually analysed
+    int analysedSites = 0;
+        
     for(int y=0;y<plnk->y;y++){//loop over sites
       
       // parsing site with index 100 (0-indexed so 101th site) - but will have parsed 100 sites
       if(y % 100==0){
 	fprintf(stderr,"Parsed sites:%d\n",y);
       }
-
-      //emil
-      fprintf(stderr,"Howdy!\n");
-      fprintf(stderr,"Howdy %c %c\n",d[0][0],d[0][1]);
-      fprintf(stderr,"Howdy %i %i\n",d[0][0],d[0][1]);
-  
-      
+        
       int cats2[4] = {0,0,0,0};
       
       for(int x=0;x<plnk->x;x++)//similar to above but with transposed plink matrix
@@ -479,45 +525,78 @@ void wrap(const plink *plnk,const std::vector<double> &phe,const std::vector<dou
       fprintf(outFile,"%s\t%s\n",p->bufstr.s,p->tmpstr.s);
       p->bufstr.l=p->tmpstr.l=0;
     }
+
+    // write how many sites analysed 
+    fprintf(stderr,"Number of analysed sites is:\t %i\n",analysedSites);
+    fprintf(logFile,"Number of analysed sites is:\t %i\n",analysedSites);
+    
+    fprintf(stderr,"\t-> done\n");
+    kill_pars(p,plnk->x);
+    
+    for(int i=0;i<plnk->y;i++)
+      delete [] d[i];
+    delete [] d;
+    
     
   } else{
     
-    int NumJobs = plnk->x;
+    int NumJobs = plnk->y;
     // has to read all parameters/data into this struct
+
+    
+    double blockd = NumJobs/(double) nThreads;
+    // so the blocks are at least a little too big,
+    // meaning last block might be a bit smaller
+    int block = ceil(blockd);
+
+    fprintf(stderr,"NumJobs %i, block %i, blockd %f\n",NumJobs,block,blockd);
+    
+    pars **all_pars = new pars*[nThreads];
+
+    for(int i=0;i<nThreads;i++){
+      all_pars[i]=init_pars(plnk->x,cov.dy,model,maxIter,tol,start,phe,regression,logFile,estSE,useM0R0);
+    }
 
     worker_args **all_args = new worker_args*[nThreads];
     
+    int first = 0;
+    for(int i=0;i<nThreads;i++){            
+      int second = first + block;
+      all_args[i]=new worker_args(first,second,all_pars[i],d,phe,ad,start,freq,cov,loci,i);
+      first = first + block;
+    }
+    
+    //make tmp files that each thread will write you
     for(int i=0;i<nThreads;i++){
-
-      all_args[i]=new worker_args(p,d,phe,ad,start,freq,cov,loci,i,outFile);
-      
+      char buf[strlen(outname)+20];
+      snprintf(buf,strlen(outname)+20,"%s.tmp%d.tmp",outname,i);           
+      FILE *fp=NULL;
+      fp=fopen(buf,"wb");
+      assert(fp!=NULL);
+      all_args[i]->tmpFile=fp;
+      all_args[i]->tmpFileName=strdup(buf);      
     }
     
     pthread_t thread1[nThreads];
     
-    // this has to be threaded version of main_anal
+    // this has to be threaded version of main_analysis
     for (int i = 0; i < nThreads; i++)
-      pthread_create(&thread1[i], NULL, &main_analysis_thread, all_args[i]);
+      assert(pthread_create(&thread1[i], NULL, &main_analysis_thread, all_args[i])==0);
     
     // Wait all threads to finish
     for (int i = 0; i < nThreads; i++)
-      pthread_join(thread1[i], NULL);
-
-
+      assert(pthread_join(thread1[i], NULL)==0);
+    
+    //std::sort(myresults.begin(),myresults.end(),myresSort);
+    
+    for(int i=0;i<myresults.size();i++){
+      fprintf(stderr,"%i\n",i);
+      fprintf(outFile,"%s\n",myresults[i].res);
+    }
     
   }
                   
-  // write how many sites analysed 
-  fprintf(stderr,"Number of analysed sites is:\t %i\n",analysedSites);
-  fprintf(logFile,"Number of analysed sites is:\t %i\n",analysedSites);
-  
-  fprintf(stderr,"\t-> done\n");
-  kill_pars(p,plnk->x);
  
-  for(int i=0;i<plnk->y;i++)
-    delete [] d[i];
-  delete [] d;
-
 }
 
 void print(pars *p,FILE *fp){
