@@ -73,7 +73,6 @@ struct worker_args_t{
   FILE* tmpFile;
   char* tmpFileName;
   int nSites;
-  pthread_mutex_t lock;
 
   // construct for worker_args_t struct
   worker_args_t(int &first1,int &second1,pars* p1,char** d1,std::vector<double> phe1,std::vector<double> ad1,std::vector<double> start1,Matrix<double> &freq1,Matrix<double> &cov1,std::vector<char*> loci1,int &i1){
@@ -351,39 +350,7 @@ void *main_analysis_thread(void* threadarg){
     }
 
     if(!SIG_COND){
-      fprintf(stderr,"thread %i closing\n",td->i);
-
-      /*
-      
-      fprintf(stderr,"thread adress %p %p\n",td->tmpFile,td->tmpFileName);
-      //locking the struct so files can be deleted with conflicts
-
-
-      pthread_mutex_lock(&td->lock);
-
-      fclose(td->tmpFile);
-      unlink(td->tmpFileName);
-      free(td->tmpFileName);
-          
-      pthread_mutex_unlock(&td->lock);
-
-      while(1){
-	if (pthread_mutex_lock(&td->lock)!= 0) {
-	  // failed to get lock              
-	  pthread_mutex_unlock(&td->lock);              
-	  continue;         
-	}         
-	break;     
-      }
-
-      fclose(td->tmpFile);
-      unlink(td->tmpFileName);
-      free(td->tmpFileName);
-          
-      pthread_mutex_unlock(&td->lock);
-      
-      */
-      
+      fprintf(stderr,"thread %i closing\n",td->i);          
       pthread_exit(NULL);
     }
     
@@ -391,9 +358,9 @@ void *main_analysis_thread(void* threadarg){
     if(parsedThreadSites % 100==0){
       fprintf(stderr,"Parsed sites:%i\n",parsedThreadSites);
     }
-    parsedThreadSites++;
     
-               
+    parsedThreadSites++;
+                   
     int cats2[4] = {0,0,0,0};
     
     for(int x=0;x<td->p->len;x++){//similar to above but with transposed plink matrix
@@ -548,12 +515,7 @@ void wrap(const plink *plnk,const std::vector<double> &phe,const std::vector<dou
     fprintf(logFile,"Results written to:\t %s\n",outname);
     
     fprintf(stderr,"\t-> done\n");
-    kill_pars(p,plnk->x);
-    
-    for(int i=0;i<plnk->y;i++)
-      delete [] d[i];
-    delete [] d;
-    
+    kill_pars(p,plnk->x);         
     
   } else{
 
@@ -587,7 +549,9 @@ void wrap(const plink *plnk,const std::vector<double> &phe,const std::vector<dou
       first = first + block;
     }
 
-    fprintf(stderr,"Temporary files being written to %s\n",dirname(strdup(outname)));
+    char* outnameDup = strdup(outname);
+    fprintf(stderr,"Temporary files being written to %s\n",dirname(outnameDup));
+    free(outnameDup);
     
     //make tmp files that each thread will write you
     for(int i=0;i<nThreads;i++){
@@ -639,6 +603,12 @@ void wrap(const plink *plnk,const std::vector<double> &phe,const std::vector<dou
     for(int i=0;i<myresults.size();i++){
       fprintf(outFile,"%s\n",myresults[i].res);
     }
+
+
+    
+    for(int i=0;i<nThreads;i++)
+      kill_pars(all_pars[i],plnk->x);
+    delete [] all_pars;
     
     // write how many sites analysed 
     fprintf(stderr,"Number of analysed sites is:\t %i\n",analysedThreadSites);
@@ -652,8 +622,18 @@ void wrap(const plink *plnk,const std::vector<double> &phe,const std::vector<dou
       unlink(all_args[i]->tmpFileName);
       free(all_args[i]->tmpFileName);
     }
+
+    for(int i=0;i<nThreads;i++){    
+      delete all_args[i];
+    }
+    delete [] all_args;
+
     
   }
+  
+  for(int i=0;i<plnk->y;i++)
+    delete [] d[i];
+  delete [] d;
                   
  
 }

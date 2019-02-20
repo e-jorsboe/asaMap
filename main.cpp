@@ -252,10 +252,11 @@ int main(int argc,char **argv){
   fflush(logFile);
   
   wrap(p,pheno,adprop,f,model,s,cov,mIter,tol,loci,nThreads,outFile,logFile,regression,estSE,useM0R0,outname2);
-
+  
   //cleanup
   kill_plink(p);
-  
+
+  delete [] outname2;
   fclose(outFile);
   
   for(int i=0;i<cov.dx;i++){
