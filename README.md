@@ -49,13 +49,13 @@ PF=plinkFile #without postfix e.g. no .bim / .fam / .bed
 admixture $PF.bed 2
 
 #run asaMap with .Qfile
-../asaMap -p $PF -o out -c $COV -y $PH -Q $PF.2.Q -f $PF.2.P
+./asaMap -p $PF -o out -c $COV -y $PH -Q $PF.2.Q -f $PF.2.P
 
 #get admixture proportions for population 1
 cut -f1 -d" " $PF.2.Q > Q
 
 #run asaMap with admix proportions
-../asaMap -p $PF -o out -c $COV -y $PH -a Q -f $PF.2.P
+./asaMap -p $PF -o out -c $COV -y $PH -a Q -f $PF.2.P
 ```
 
 ### p-values
