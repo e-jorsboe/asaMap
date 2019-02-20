@@ -6,6 +6,7 @@
 #include "analysisFunction.h"
 #include <pthread.h>
 #include <signal.h>
+#include <libgen.h>
 
 typedef struct{
   int index; //site 
@@ -72,6 +73,7 @@ struct worker_args_t{
   FILE* tmpFile;
   char* tmpFileName;
   int nSites;
+  pthread_mutex_t lock;
 
   // construct for worker_args_t struct
   worker_args_t(int &first1,int &second1,pars* p1,char** d1,std::vector<double> phe1,std::vector<double> ad1,std::vector<double> start1,Matrix<double> &freq1,Matrix<double> &cov1,std::vector<char*> loci1,int &i1){
@@ -95,24 +97,6 @@ struct worker_args_t{
 
 typedef struct worker_args_t worker_args;
 
-char* dirname(char* path){
-
-  char *c = new char[4096];
-  char *saveptr;
-  char *tok = strtok_r(path,"/",&saveptr);
-
-  memset(c, 0, 4096 * (sizeof c[0]) );
-  
-  strncat(c,"/",1);    
-  while(tok!=NULL){
-    strncat(c,tok,strlen(tok));
-    strncat(c,"/",1);    
-    tok = strtok_r(NULL,"/",&saveptr);        
-  }
-
-  return(c);
-  
-}
 
 double sd(double *a,int l){
   double ts = 0;
@@ -368,7 +352,38 @@ void *main_analysis_thread(void* threadarg){
 
     if(!SIG_COND){
       fprintf(stderr,"thread %i closing\n",td->i);
-      //do some cleaning here but how...?
+
+      /*
+      
+      fprintf(stderr,"thread adress %p %p\n",td->tmpFile,td->tmpFileName);
+      //locking the struct so files can be deleted with conflicts
+
+
+      pthread_mutex_lock(&td->lock);
+
+      fclose(td->tmpFile);
+      unlink(td->tmpFileName);
+      free(td->tmpFileName);
+          
+      pthread_mutex_unlock(&td->lock);
+
+      while(1){
+	if (pthread_mutex_lock(&td->lock)!= 0) {
+	  // failed to get lock              
+	  pthread_mutex_unlock(&td->lock);              
+	  continue;         
+	}         
+	break;     
+      }
+
+      fclose(td->tmpFile);
+      unlink(td->tmpFileName);
+      free(td->tmpFileName);
+          
+      pthread_mutex_unlock(&td->lock);
+      
+      */
+      
       pthread_exit(NULL);
     }
     
@@ -480,9 +495,10 @@ void wrap(const plink *plnk,const std::vector<double> &phe,const std::vector<dou
     
     // counts number of sites actually analysed
     int analysedSites = 0;
-        
-    for(int y=0;y<plnk->y;y++){//loop over sites
-      
+    // which site, starts at -1 to make it fit with loop    
+    int y = -1;
+    while(++y<plnk->y && SIG_COND){//loop over sites
+
       // parsing site with index 100 (0-indexed so 101th site) - but will have parsed 100 sites
       if(y % 100==0){
 	fprintf(stderr,"Parsed sites:%d\n",y);
@@ -492,11 +508,11 @@ void wrap(const plink *plnk,const std::vector<double> &phe,const std::vector<dou
       
       for(int x=0;x<plnk->x;x++)//similar to above but with transposed plink matrix
 	cats2[d[y][x]]++;
-
       
       //discard sites if missingness > 0.1
       if((cats2[3]/(double)(cats2[0]+cats2[1]+cats2[2]))>0.1){
 	fprintf(stderr,"skipping site[%d] due to excess missingness\n",y);
+	y++;
 	continue;
       }
       
@@ -519,8 +535,11 @@ void wrap(const plink *plnk,const std::vector<double> &phe,const std::vector<dou
       analysedSites++;
       fprintf(outFile,"%s\t%s\n",p->bufstr.s,p->tmpstr.s);
       p->bufstr.l=p->tmpstr.l=0;
-    }
 
+    }
+    
+    fflush(outFile);
+    
     // write how many sites analysed 
     fprintf(stderr,"Number of analysed sites is:\t %i\n",analysedSites);
     fprintf(logFile,"Number of analysed sites is:\t %i\n",analysedSites);
@@ -549,6 +568,7 @@ void wrap(const plink *plnk,const std::vector<double> &phe,const std::vector<dou
     
     pars **all_pars = new pars*[nThreads];
 
+    // to only have header included in the first thread
     for(int i=0;i<nThreads;i++){
       if(i==0){
 	all_pars[i]=init_pars(plnk->x,cov.dy,model,maxIter,tol,start,phe,regression,logFile,estSE,useM0R0,1);
@@ -626,7 +646,6 @@ void wrap(const plink *plnk,const std::vector<double> &phe,const std::vector<dou
 
     fprintf(stderr,"Results written to:\t %s\n",outname);
     fprintf(logFile,"Results written to:\t %s\n",outname);
-
     
     for(int i=0;i<nThreads;i++){
       fclose(all_args[i]->tmpFile);
