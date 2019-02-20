@@ -5,6 +5,7 @@
 #include "asaMap.h"
 #include "analysisFunction.h"
 #include <pthread.h>
+#include <signal.h>
 
 typedef struct{
   int index; //site 
@@ -18,6 +19,8 @@ std::vector<myres> myresults;
 bool myresSort (myres a,myres b){  
   return a.index<b.index;
 }
+
+int SIG_COND=1;//if we catch signal then quit program nicely
 
 // how many sites analysed in threaded mode
 int analysedThreadSites = 0;
@@ -46,6 +49,12 @@ void kill_pars(pars *p,size_t l){
   
 }
 
+void handler(int s) {
+
+  fprintf(stderr,"Caught SIGNAL: %d will try to exit nicely (no more threads are created, we will wait for the current threads to finish)\n",s);
+  SIG_COND=0;
+  
+}
 
 struct worker_args_t{
 
@@ -85,6 +94,25 @@ struct worker_args_t{
 };
 
 typedef struct worker_args_t worker_args;
+
+char* dirname(char* path){
+
+  char *c = new char[4096];
+  char *saveptr;
+  char *tok = strtok_r(path,"/",&saveptr);
+
+  memset(c, 0, 4096 * (sizeof c[0]) );
+  
+  strncat(c,"/",1);    
+  while(tok!=NULL){
+    strncat(c,tok,strlen(tok));
+    strncat(c,"/",1);    
+    tok = strtok_r(NULL,"/",&saveptr);        
+  }
+
+  return(c);
+  
+}
 
 double sd(double *a,int l){
   double ts = 0;
@@ -330,13 +358,17 @@ void *main_analysis_thread(void* threadarg){
 
   worker_args * td;
   td = ( worker_args * ) threadarg;
-
-  fprintf(stderr,"Thread %i started\n",td->i);
   
   for(int i=td->first;i<td->second;i++){
 
     //if last block has sites with values larger than nSites
     if(i>=td->nSites){
+      pthread_exit(NULL);      
+    }
+
+    if(!SIG_COND){
+      fprintf(stderr,"thread %i closing\n",td->i);
+      //do some cleaning here but how...?
       pthread_exit(NULL);
     }
     
@@ -408,7 +440,14 @@ void wrap(const plink *plnk,const std::vector<double> &phe,const std::vector<dou
       d[i][j]=plnk->d[j][i];
   }
 
- 
+  //below for catching ctrl+c, and dumping files
+  struct sigaction sa;
+  sigemptyset (&sa.sa_mask);
+  sa.sa_flags = 0;
+  sa.sa_handler = handler;
+  sigaction(SIGPIPE, &sa, 0);
+  sigaction(SIGINT, &sa, 0);  
+   
   if(nThreads==1){
     
     //we prep for threading. By using encapsulating all data need for a site in struct called pars
@@ -453,10 +492,7 @@ void wrap(const plink *plnk,const std::vector<double> &phe,const std::vector<dou
       
       for(int x=0;x<plnk->x;x++)//similar to above but with transposed plink matrix
 	cats2[d[y][x]]++;
-#if 0
-      //print table
-      fprintf(stdout,"[%d] %d %d %d %d ",y,cats2[0],cats2[1],cats2[2],cats2[3]);
-#endif
+
       
       //discard sites if missingness > 0.1
       if((cats2[3]/(double)(cats2[0]+cats2[1]+cats2[2]))>0.1){
@@ -488,6 +524,9 @@ void wrap(const plink *plnk,const std::vector<double> &phe,const std::vector<dou
     // write how many sites analysed 
     fprintf(stderr,"Number of analysed sites is:\t %i\n",analysedSites);
     fprintf(logFile,"Number of analysed sites is:\t %i\n",analysedSites);
+
+    fprintf(stderr,"Results written to:\t %s\n",outname);
+    fprintf(logFile,"Results written to:\t %s\n",outname);
     
     fprintf(stderr,"\t-> done\n");
     kill_pars(p,plnk->x);
@@ -498,7 +537,8 @@ void wrap(const plink *plnk,const std::vector<double> &phe,const std::vector<dou
     
     
   } else{
-    
+
+       
     int NumJobs = plnk->y;
     // has to read all parameters/data into this struct
     
@@ -526,11 +566,13 @@ void wrap(const plink *plnk,const std::vector<double> &phe,const std::vector<dou
       all_args[i]=new worker_args(first,second,all_pars[i],d,phe,ad,start,freq,cov,loci,i);
       first = first + block;
     }
+
+    fprintf(stderr,"Temporary files being written to %s\n",dirname(strdup(outname)));
     
     //make tmp files that each thread will write you
     for(int i=0;i<nThreads;i++){
-      char buf[strlen(outname)+20];
-      snprintf(buf,strlen(outname)+20,"%s.tmp%d.tmp",outname,i);           
+      char buf[strlen(outname)+30];
+      snprintf(buf,strlen(outname)+30,"%s.tmp%d.tmp",outname,i);           
       FILE *fp=NULL;
       fp=fopen(buf,"wb");
       assert(fp!=NULL);
@@ -581,7 +623,11 @@ void wrap(const plink *plnk,const std::vector<double> &phe,const std::vector<dou
     // write how many sites analysed 
     fprintf(stderr,"Number of analysed sites is:\t %i\n",analysedThreadSites);
     fprintf(logFile,"Number of analysed sites is:\t %i\n",analysedThreadSites);
-   
+
+    fprintf(stderr,"Results written to:\t %s\n",outname);
+    fprintf(logFile,"Results written to:\t %s\n",outname);
+
+    
     for(int i=0;i<nThreads;i++){
       fclose(all_args[i]->tmpFile);
       unlink(all_args[i]->tmpFileName);

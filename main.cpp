@@ -12,6 +12,8 @@ Lines project:
 #include "analysisFunction.h"
 #include "analysis.h"
 #include <iostream>
+#include <sys/sysinfo.h>
+#include <stdio.h>
 
 #ifdef EIGEN
 #include <Eigen/Dense>
@@ -68,7 +70,7 @@ void print_info(FILE *fp){
   fprintf(fp, "   -r <FLOAT>          seed for rand\n");
   fprintf(fp, "   -P <INT>            number of threads\n");
   fprintf(fp, "   -e <INT>            estimate standard error of coefficients (0: no (default), 1: yes)\n");
-  fprintf(fp, "   -w <INT>            run M0/R0 model that models effect of other allele (0: no, 1: yes (default))\n");
+  fprintf(fp, "   -w <INT>            run M0/R0 model that models effect of other allele (0: no, 1: yes (default))\n");  
   fprintf(fp, "\n");
 }
 
@@ -148,9 +150,7 @@ int main(int argc,char **argv){
   
   clock_t t = clock();
   time_t t2 = time(NULL);
-  
-  FILE *outFile = fopen(outname, "w");
-
+ 
   // creates new char array for new name of logfile
   char *logname = new char[strlen(outname)+strlen(".log")+1];
 
@@ -162,6 +162,15 @@ int main(int argc,char **argv){
   FILE *logFile = fopen(logname, "w");
   delete [] logname;
 
+  char *outname2 = new char[strlen(outname)+strlen(".res")+1];
+
+  // copies outname to logname
+  strcpy(outname2,outname);
+
+  //puts .res at end of res file
+  strncat(outname2,".res",strlen(".res"));
+  FILE *outFile = fopen(outname2, "w");
+  
   //srand48(seed);
   std::srand(seed);
   fprintf(stderr,"Seed is: %i\n",seed);
@@ -211,6 +220,12 @@ int main(int argc,char **argv){
   assert(estSE==0 || estSE==1);
   // no standard error or standard error
   assert(useM0R0==0 || useM0R0==1);
+
+  if(nThreads > get_nprocs()){
+    nThreads = get_nprocs();
+    fprintf(stderr,"Requested more threads than avaible cores - nThreads has been set to %i\n",nThreads);
+    fprintf(logFile,"Requested more threads than avaible cores - nThreads has been set to %i\n",nThreads);    
+  }
   
   
   fprintf(logFile,"Command had following options :\t -p %s -o %s ",pname,outname);
@@ -236,7 +251,7 @@ int main(int argc,char **argv){
   // flush to disk - or force to write to disk 
   fflush(logFile);
   
-  wrap(p,pheno,adprop,f,model,s,cov,mIter,tol,loci,nThreads,outFile,logFile,regression,estSE,useM0R0,outname);
+  wrap(p,pheno,adprop,f,model,s,cov,mIter,tol,loci,nThreads,outFile,logFile,regression,estSE,useM0R0,outname2);
 
   //cleanup
   kill_plink(p);
