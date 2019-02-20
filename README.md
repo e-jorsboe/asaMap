@@ -4,12 +4,8 @@ Article
 http://biorxiv.org/content/early/2015/01/22/014001
 
 The implementation is still a work in progress. More features will be added at some point:
-- logistic regression, Poisson regression
-- larger number of populations (crazy high number of paraters - so maybe not the best idea)
-- recessive model
-- SE for beta
-- Threading
-
+- Poisson regression
+- larger number of populations (crazy high number of paraters - so maybe not the best idea) 
 
 # Install
 git clone https://github.com/angsd/asaMap.git;
@@ -20,26 +16,28 @@ make
 #Options
 ```
 Options:
-   -p '(null)'		plink prefix filename
-   -o '(null)'		output filename
-   -c '(null)'		covariance matrix filename
-   -y '(null)'		phenotypes
-   -a '(null)'		admixproportions (for source pop1)
-   -f '(null)'		allele frequencies
 
- optional arguments:
-   -m '0'		model 0=add 1=rec (not implemented yet)
-   -b '(null)'		file containing the start
-   -i '10'		max number of iterations
-   -0 '0'		full 1:M1,2:M2,3:M3
-   -1 '0'		null 1:M1,2:M2,3:M3, 4:M4 5:M5
-   -r '100'		random seed
-   -t '1.000000e-08'	float for breaking EM update
-   -P '1'		number of threads  (not implemented yet) 
+   -p <filename>       plink prefix filename
+   -o <filename>       output filename
+   -c <filename>       covariance matrix filename
+   -y <filename>       phenotypes
+   -a <filename>       admixproportions (for source pop1)
+   -Q <filename>       .Q file from ADMIXTURE
+   -f <filename>       allele frequencies (.P file)
+   -m <INTEGER>        model 0=add 1=rec (default: 0)
+   -l <INTEGER>        regression 0=linear regression, 1=logistic regression (default: 0)
+   -b <filename>       file containing the start
+   -i <UINTEGER>       maximum iterations (default: 40)
+   -t <FLOAT>          tolerance for breaking EM (default: 0.0001)
+   -r <FLOAT>          seed for rand
+   -P <INT>            number of threads
+   -e <INT>            estimate standard error of coefficients (0: no (default), 1: yes)
+   -w <INT>            run M0/R0 model that models effect of other allele (0: no, 1: yes (default))
 
-All files must be specified: -p -c -y -a -f -o
+
+All files must be specified: -p -c -y -a/-Q -f -o
 ```
-All files must be specified: -p -c -y -a -f -o
+All files must be specified: -p -c -y -a/-Q -f -o
 
 #Run example using ADMIXTURE 
 
@@ -50,18 +48,26 @@ PF=plinkFile #without postfix e.g. no .bim / .fam / .bed
 #run admixture
 admixture $PF.bed 2
 
+#run asaMap with .Qfile
+../asaMap -p $PF -o out -c $COV -y $PH -Q $PF.2.Q -f $PF.2.P
+
 #get admixture proportions for population 1
 cut -f1 -d" " $PF.2.Q > Q
 
-#run asaMap
+#run asaMap with admix proportions
 ../asaMap -p $PF -o out -c $COV -y $PH -a Q -f $PF.2.P
 ```
 
 ### p-values
 Easy to optain in R
 
+Using R/getPvalues.R (will create out.res.Pvalues)
 ```
-res <- read.table("out",head=T)
+Rscript R/getPvalues.R out.res
+```
+
+```
+res <- read.table("out.res",head=T)
 pval <- function(a,b,df)
   1- pchisq(-2*(a-b),df=df)
 #pvalues for M1 vs. M5
@@ -75,11 +81,22 @@ pval(res$llh.M1.,res$llh.M4.,df=1)
 
 | model | parameters | notes | #effect Parameters |
 | --- | --- | --- | --- |
-| M1 |(\beta_1,\beta_2)\in R^2  | population specific effects | 2 |
+| M0 | (\beta_1,\beta_2,\delta_1)\in R^3 | effect of non-assumed effect allele | 1 |
+| M1 | (\beta_1,\beta_2)\in R^2  | population specific effects | 2 |
 | M2 | \beta_1=0,\beta_2\in R | no effect in population  | 1 | 
 | M3 | \beta_1\in R, \beta_2=0 | no effect in population 2 | 1 |
-| M4 |\beta_1=\beta_2\in R | same effect in both populations | 1 |
+| M4 | \beta_1=\beta_2\in R | same effect in both populations | 1 |
 | M5 | \beta_1=\beta_2=0 | no effect in any population | 0 |
+
+| --- | --- | --- | --- |
+| R0 | (\beta_1,\beta_m,\beta_2,\delta_1,\delta_2)\in R^5 | recessive effect of non-assumed effect alleles | 2 |
+| R1 | (\beta_1,\beta_m,\beta_2)\in R^3 | population specific effects | 3 |
+| R2 | \beta_1\in R,\beta_m=\beta_2\in R | same effect when one or both variant alleles are from pop 2 | 2 | 
+| R3 | \beta_1=\beta_m\in R,\beta_2\in R | same effect when one or both variant alleles are from pop 1 | 2 |
+| R4 | \beta_1\in R,\beta_m=\beta_2=0 | only an effect when both variant alleles are from pop 1 | 1 |
+| R5 | \beta_1=\beta_m=0, \beta_2\in R | only an effect when both variant alleles are from pop 2 | 1 |
+| R6 | \beta_1=\beta_m=\beta_2\in R | same effect regardless of ancestry | 1 |
+| R7 | \beta_1=\beta_m=\beta_2=0 | no effect in any population | 0 |
 
 
 #Input files
@@ -102,7 +119,7 @@ A file with each individuals phenotypes on each line. e.g.
 0.0881848860116932
 ```
 ### extra covariates (in addition to the intersept and genotypes)
-A file where each column is a covariate and each row is an individual
+A file where each column is a covariate and each row is an individual - should NOT have columns of 1s for intercept (intercept will be included automatically)
 ```
 >head cov
 0.0127096117618385 -0.0181281029917176 -0.0616739439849275 -0.0304606694443973
@@ -117,7 +134,27 @@ A file where each column is a covariate and each row is an individual
 0.0190516629849255 -0.0194012185542486 -0.0413589828106922 -0.0292318169458017
 ```
 ###admixture proportions
-Right now the implementation is just for two populations and the admixture porportions is a file with a column consisting or the admixture proportions for population 1. 
+
+
+Right now the implementation is just for two populations and the admixture porportions is a file with a column consisting or the admixture proportions for population 1.
+
+Either using a .Qfile from ADMIXTURE
+
+```
+>head $PF.2.Q
+0.398834 0.601166
+0.491314 0.508686
+0.399352 0.600648
+0.634947 0.365053
+0.000010 0.999990
+0.467470 0.532530
+0.497885 0.502115
+0.800272 0.199728
+0.999990 0.000010
+0.032108 0.967892
+```
+
+Or using a column of the admixture proportions of the first population
 ```
 >head Q
 0.398834

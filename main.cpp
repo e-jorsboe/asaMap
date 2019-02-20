@@ -58,7 +58,7 @@ void print_info(FILE *fp){
   fprintf(fp, "   -p <filename>       plink prefix filename\n");
   fprintf(fp, "   -o <filename>       output filename\n");
   fprintf(fp, "   -c <filename>       covariance matrix filename\n");
-  fprintf(fp, "   -s <filename>       phenotypes\n");
+  fprintf(fp, "   -y <filename>       phenotypes\n");
   fprintf(fp, "   -a <filename>       admixproportions (for source pop1)\n");
   fprintf(fp, "   -Q <filename>       .Q file from ADMIXTURE\n");
   fprintf(fp, "   -f <filename>       allele frequencies (.P file)\n");
