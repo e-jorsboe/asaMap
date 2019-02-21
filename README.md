@@ -9,7 +9,7 @@ The implementation is still a work in progress. More features might be added at 
 
 # Install
 git clone https://github.com/angsd/asaMap.git;
-cd asaMap
+cd asaMap;
 make
 
 # Options
