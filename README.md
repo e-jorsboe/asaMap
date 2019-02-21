@@ -3,23 +3,22 @@
 Article
 http://biorxiv.org/content/early/2015/01/22/014001
 
-The implementation is still a work in progress. More features will be added at some point:
+The implementation is still a work in progress. More features might be added at some point:
 - Poisson regression
-- larger number of populations (crazy high number of paraters - so maybe not the best idea) 
+- larger number of populations (crazy high number of parameters - so maybe not the best idea) 
 
 # Install
 git clone https://github.com/angsd/asaMap.git;
-
 cd asaMap
-
 make
-#Options
+
+# Options
 ```
 Options:
 
    -p <filename>       plink prefix filename
    -o <filename>       output filename
-   -c <filename>       covariance matrix filename
+   -c <filename>       covariates filename
    -y <filename>       phenotypes
    -a <filename>       admixproportions (for source pop1)
    -Q <filename>       .Q file from ADMIXTURE
@@ -39,7 +38,7 @@ All files must be specified: -p -c -y -a/-Q -f -o
 ```
 All files must be specified: -p -c -y -a/-Q -f -o
 
-#Run example using ADMIXTURE 
+# Run example using ADMIXTURE 
 
 ```
 PH=pheno.files
@@ -61,7 +60,7 @@ cut -f1 -d" " $PF.2.Q > Q
 ### p-values
 Easy to optain in R
 
-Using R/getPvalues.R (will create out.res.Pvalues)
+Using R/getPvalues.R (will create file: out.res.Pvalues)
 ```
 Rscript R/getPvalues.R out.res
 ```
@@ -77,7 +76,7 @@ pval(res$llh.M1.,res$llh.M5.,df=2)
 pval(res$llh.M1.,res$llh.M4.,df=1)
 ```
 
-###models
+### models
 
 | model | parameters | notes | #effect Parameters |
 | --- | --- | --- | --- |
@@ -88,6 +87,7 @@ pval(res$llh.M1.,res$llh.M4.,df=1)
 | M4 | \beta_1=\beta_2\in R | same effect in both populations | 1 |
 | M5 | \beta_1=\beta_2=0 | no effect in any population | 0 |
 
+| model | parameters | notes | #effect Parameters |
 | --- | --- | --- | --- |
 | R0 | (\beta_1,\beta_m,\beta_2,\delta_1,\delta_2)\in R^5 | recessive effect of non-assumed effect alleles | 2 |
 | R1 | (\beta_1,\beta_m,\beta_2)\in R^3 | population specific effects | 3 |
@@ -99,12 +99,12 @@ pval(res$llh.M1.,res$llh.M4.,df=1)
 | R7 | \beta_1=\beta_m=\beta_2=0 | no effect in any population | 0 |
 
 
-#Input files
-###Genotypes
+# Input files
+### Genotypes
 plink binary (.bim .bam .fam)
 
-###Phenotypes (response)
-A file with each individuals phenotypes on each line. e.g. 
+### Phenotypes (response)
+A file with each individuals phenotypes on each line. e.g., has to have same number of rows as .fam file.
 ```
 >head pheno 
 -0.712027291121767
@@ -119,7 +119,8 @@ A file with each individuals phenotypes on each line. e.g.
 0.0881848860116932
 ```
 ### extra covariates (in addition to the intersept and genotypes)
-A file where each column is a covariate and each row is an individual - should NOT have columns of 1s for intercept (intercept will be included automatically)
+A file where each column is a covariate and each row is an individual - should NOT have columns of 1s for intercept (intercept will be included automatically).
+This file has to have same number of rows as phenotype file and .fam file.
 ```
 >head cov
 0.0127096117618385 -0.0181281029917176 -0.0616739439849275 -0.0304606694443973
@@ -133,12 +134,10 @@ A file where each column is a covariate and each row is an individual - should N
 0.0194100156955457 -0.0371103372950621 0.00813012568415838 -0.015311879434991
 0.0190516629849255 -0.0194012185542486 -0.0413589828106922 -0.0292318169458017
 ```
-###admixture proportions
+### admixture proportions
 
 
-Right now the implementation is just for two populations and the admixture porportions is a file with a column consisting or the admixture proportions for population 1.
-
-Either using a .Qfile from ADMIXTURE
+Right now the implementation is just for two populations. Either using a .Qfile from ADMIXTURE - has to have same number of rows as .fam file.
 
 ```
 >head $PF.2.Q
@@ -154,7 +153,7 @@ Either using a .Qfile from ADMIXTURE
 0.032108 0.967892
 ```
 
-Or using a column of the admixture proportions of the first population
+Or using a column of the admixture proportions of the first population - has to have same number of rows as .fam file.
 ```
 >head Q
 0.398834
@@ -170,7 +169,7 @@ Or using a column of the admixture proportions of the first population
 ```
 
 ### ancestral allele frequencies
-A files where each column is a population and each row is a SNP. 
+A files where each column is a population and each row is a SNP. This file has to have same number of rows as .bim file.
 ```
 >head P
 0.907268 0.903723

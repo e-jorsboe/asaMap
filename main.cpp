@@ -57,10 +57,10 @@ void print_info(FILE *fp){
   fprintf(fp, "Options:\n");
   fprintf(fp, "   -p <filename>       plink prefix filename\n");
   fprintf(fp, "   -o <filename>       output filename\n");
-  fprintf(fp, "   -c <filename>       covariance matrix filename\n");
+  fprintf(fp, "   -c <filename>       covariates filename\n");
   fprintf(fp, "   -y <filename>       phenotypes\n");
-  fprintf(fp, "   -a <filename>       admixproportions (for source pop1)\n");
-  fprintf(fp, "   -Q <filename>       .Q file from ADMIXTURE\n");
+  fprintf(fp, "   -a <filename>       admixproportions (for source pop1) - either specify this or -Q\n");
+  fprintf(fp, "   -Q <filename>       .Q file from ADMIXTURE - either specify this or -a\n");
   fprintf(fp, "   -f <filename>       allele frequencies (.P file)\n");
   fprintf(fp, "   -m <INTEGER>        model 0=add 1=rec (default: 0)\n");
   fprintf(fp, "   -l <INTEGER>        regression 0=linear regression, 1=logistic regression (default: 0)\n");
