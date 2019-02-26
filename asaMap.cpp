@@ -943,7 +943,7 @@ void mkDesign(pars *p){
        }
    }
 
-   // emil - now design has 3 columns (alternative allele also) + number of covariates
+   // now design has 3 columns (alternative allele also) + number of covariates
    p->design->dy=p->covs->dy+3;
    
    //rec model
@@ -963,7 +963,7 @@ void mkDesign(pars *p){
 	  p->design->d[i*4+j][5+c] = p->covs->d[i][c];
 	}
     }            
-    // emil - now design has 5 columns (alternative allele also) + number of covariates
+    // now design has 5 columns (alternative allele also) + number of covariates
     p->design->dy=p->covs->dy+5;
   }   
    p->design->dx=p->len*4;
@@ -1109,10 +1109,11 @@ double standardError(double *start,Matrix<double> *design,Matrix<double> *ysCgs,
   
 }
 
-  
+
 void controlEM(pars *p){
   double pars0[p->design->dy+1];
-  memcpy(pars0,p->start,sizeof(double)*(p->design->dy+1));
+  std::copy(p->start,p->start+(p->design->dy+1),pars0);    
+  //memcpy(pars0,p->start,sizeof(double)*(p->design->dy+1));
   double llh0 = logLikeP(p);
   double llh1;
   for(int i=0;i<p->maxIter;i++){
@@ -1121,8 +1122,9 @@ void controlEM(pars *p){
       //	 fprintf(stderr,"Converged \n");
       break;
     } else if(llh0<llh1){
-      //	 fprintf(stderr,"Fit caused increase in likelihood, will roll back to previous step\n");		 
-      memcpy(p->start,pars0,sizeof(double)*(p->design->dy+1));
+      //	 fprintf(stderr,"Fit caused increase in likelihood, will roll back to previous step\n");
+      std::copy(p->start,p->start+(p->design->dy+1),pars0);  
+      //memcpy(p->start,pars0,sizeof(double)*(p->design->dy+1));
       break;
     } else if(llh1<-4){
       // if issue with weights that are nan or inf
@@ -1134,8 +1136,9 @@ void controlEM(pars *p){
       break;
     }
            
-    llh0=llh1;   
-    memcpy(pars0,p->start,sizeof(double)*(p->design->dy+1));
+    llh0=llh1;
+    std::copy(p->start,p->start+(p->design->dy+1),pars0);  
+    //memcpy(pars0,p->start,sizeof(double)*(p->design->dy+1));
     
   }
   if(p->estSE==1){
@@ -1157,7 +1160,7 @@ void rmCol(Matrix<double> *d,int at){
   d->dy--;
 }
 
-// emil, gets start array, index to remove and length of array
+// gets start array, index to remove and length of array
 void rmPos(double *d,int at,int l){
   for(int i=0;0&&i<l;i++)
     fprintf(stderr,"i[%d]:%f\n",i,d[i]);  
@@ -1168,7 +1171,7 @@ void rmPos(double *d,int at,int l){
       d[cnt++] = d[j];
     }
   }
-  // emil - set last value to 0 - as all values are shifted one to the left
+  // set last value to 0 - as all values are shifted one to the left
   d[l-1]=0;
   
   for(int i=0;0&&i<l;i++)
@@ -1229,23 +1232,23 @@ void asamEM(pars *p){
       mkDesign(p);
       p_sCg(p);
                   
-      Matrix<double>* expD = expectedDesign(p);    
+      p->expD = expectedDesign(p);    
       
       if(p->regression==0){
 #ifdef EIGEN
-	tmp = getFit2(p->start,p->ys,expD->d,NULL,expD->dx,expD->dy,-1);
+	tmp = getFit2(p->start,p->ys,p->expD->d,NULL,p->expD->dx,p->expD->dy,-1);
 #else
-	tmp = getFit(p->start,p->ys,expD->d,NULL,expD->dx,expD->dy,-1);
+	tmp = getFit(p->start,p->ys,p->expD->d,NULL,p->expD->dx,p->expD->dy,-1);
 #endif      
       } else{
 #ifdef EIGEN
-	tmp = getFitBin2(p->start,p->ys,expD->d,NULL,expD->dx,expD->dy,-1);
+	tmp = getFitBin2(p->start,p->ys,p->expD->d,NULL,p->expD->dx,p->expD->dy,-1);
 #else
-	tmp = getFitBin(p->start,p->ys,expD->d,NULL,expD->dx,expD->dy,-1);
+	tmp = getFitBin(p->start,p->ys,p->expD->d,NULL,p->expD->dx,p->expD->dy,-1);
 #endif      
       }
 
-      kill(expD);
+      kill(p->expD);
       
       if(maf0 && maf1){
 	controlEM(p);
@@ -1264,23 +1267,23 @@ void asamEM(pars *p){
       rmPos(p->start,2,p->covs->dy+3+1);
       rmCol(p->design,2);
             
-      Matrix<double>* expD = expectedDesign(p);    
+      p->expD = expectedDesign(p);    
       
       if(p->regression==0){
 #ifdef EIGEN
-	tmp = getFit2(p->start,p->ys,expD->d,NULL,expD->dx,expD->dy,-1);
+	tmp = getFit2(p->start,p->ys,p->expD->d,NULL,p->expD->dx,p->expD->dy,-1);
 #else
-	tmp = getFit(p->start,p->ys,expD->d,NULL,expD->dx,expD->dy,-1);
+	tmp = getFit(p->start,p->ys,p->expD->d,NULL,p->expD->dx,p->expD->dy,-1);
 #endif      
       } else{
 #ifdef EIGEN
-	tmp = getFitBin2(p->start,p->ys,expD->d,NULL,expD->dx,expD->dy,-1);
+	tmp = getFitBin2(p->start,p->ys,p->expD->d,NULL,p->expD->dx,p->expD->dy,-1);
 #else
-	tmp = getFitBin(p->start,p->ys,expD->d,NULL,expD->dx,expD->dy,-1);
+	tmp = getFitBin(p->start,p->ys,p->expD->d,NULL,p->expD->dx,p->expD->dy,-1);
 #endif      
       }
 
-      kill(expD);	
+      kill(p->expD);	
       
     } else{
       
@@ -1329,7 +1332,9 @@ void asamEM(pars *p){
     
     mkDesign(p);
     p_sCg(p);
-    memcpy(p->start,p->start0,sizeof(double)*(p->design->dy+1));
+
+    // memcpy is not thread safe
+    std::copy(p->start0,p->start0+(p->design->dy+1),p->start);    
 
     // remove A1 third in design (NB!! now second cause second was removed), remember start has sd(y) at the end (one longer)
     rmPos(p->start,2,p->covs->dy+3+1);
@@ -1366,7 +1371,7 @@ void asamEM(pars *p){
     
     p_sCg(p);
     
-    // emil - start gets values in getFit - these are the coefs
+    // start gets values in getFit - these are the coefs
     for(int i=0;i<p->design->dy+2;i++)
       p->start[i]=NAN;
 
@@ -1399,7 +1404,7 @@ void asamEM(pars *p){
       }
     }            
        
-    // emil - has to skip both B2 and A1 (column 2 and 3 design matrix)
+    // has to skip both B2 and A1 (column 2 and 3 design matrix)
     for(int i=p->design->dy;i>2;i--){
       // should let first column be, and move later than 3rd later, 2 columns up (4th->2nd, 5th->3rd,...)
       p->start[i] = p->start[i-2];
@@ -1462,19 +1467,19 @@ void asamEM(pars *p){
 	mkDesign(p);
 	p_sCg(p);
 	
-	Matrix<double>* expD = expectedDesign(p);    
+	p->expD = expectedDesign(p);    
 	
 	if(p->regression==0){
 #ifdef EIGEN
-	  tmp = getFit2(p->start,p->ys,expD->d,NULL,expD->dx,expD->dy,-1);
+	  tmp = getFit2(p->start,p->ys,p->expD->d,NULL,p->expD->dx,p->expD->dy,-1);
 #else
-	  tmp = getFit(p->start,p->ys,expD->d,NULL,expD->dx,expD->dy,-1);
+	  tmp = getFit(p->start,p->ys,p->expD->d,NULL,p->expD->dx,p->expD->dy,-1);
 #endif      
 	} else{
 #ifdef EIGEN
-	  tmp = getFitBin2(p->start,p->ys,expD->d,NULL,expD->dx,expD->dy,-1);
+	  tmp = getFitBin2(p->start,p->ys,p->expD->d,NULL,p->expD->dx,p->expD->dy,-1);
 #else
-	  tmp = getFitBin(p->start,p->ys,expD->d,NULL,expD->dx,expD->dy,-1);
+	  tmp = getFitBin(p->start,p->ys,p->expD->d,NULL,p->expD->dx,p->expD->dy,-1);
 #endif      
 	}
 
@@ -1485,7 +1490,7 @@ void asamEM(pars *p){
 	  printNan(p,0);
 	}
 	
-	kill(expD);
+	kill(p->expD);
 		
       }
       
@@ -1494,23 +1499,23 @@ void asamEM(pars *p){
 	mkDesign(p);
 	p_sCg(p);
 	
-	Matrix<double>* expD = expectedDesign(p);    
+	p->expD = expectedDesign(p);    
 	
 	if(p->regression==0){
 #ifdef EIGEN
-	  tmp = getFit2(p->start,p->ys,expD->d,NULL,expD->dx,expD->dy,-1);
+	  tmp = getFit2(p->start,p->ys,p->expD->d,NULL,p->expD->dx,p->expD->dy,-1);
 #else
-	  tmp = getFit(p->start,p->ys,expD->d,NULL,expD->dx,expD->dy,-1);
+	  tmp = getFit(p->start,p->ys,p->expD->d,NULL,p->expD->dx,p->expD->dy,-1);
 #endif      
 	} else{
 #ifdef EIGEN
-	  tmp = getFitBin2(p->start,p->ys,expD->d,NULL,expD->dx,expD->dy,-1);
+	  tmp = getFitBin2(p->start,p->ys,p->expD->d,NULL,p->expD->dx,p->expD->dy,-1);
 #else
-	  tmp = getFitBin(p->start,p->ys,expD->d,NULL,expD->dx,expD->dy,-1);
+	  tmp = getFitBin(p->start,p->ys,p->expD->d,NULL,p->expD->dx,p->expD->dy,-1);
 #endif      
 	}
 	
-	kill(expD);		
+	kill(p->expD);		
 	
       } else{
         
@@ -1572,7 +1577,8 @@ void asamEM(pars *p){
     
     mkDesign(p);
     p_sCg(p);
-    memcpy(p->start,p->start0,sizeof(double)*(p->design->dy+1));
+    
+    std::copy(p->start0,p->start0+(p->design->dy+1),p->start);    
 
     // generating first column: Rm + R1
     for(int i=0;i<p->design->dx;i++){      
@@ -1608,7 +1614,8 @@ void asamEM(pars *p){
         
     mkDesign(p);
     p_sCg(p);
-    memcpy(p->start,p->start0,sizeof(double)*(p->design->dy+1));
+
+    std::copy(p->start0,p->start0+(p->design->dy+1),p->start);
         
     // remove fourth column from design - column counting delta1
     rmPos(p->start,3,p->covs->dy+5+1);
@@ -1642,7 +1649,8 @@ void asamEM(pars *p){
 
     mkDesign(p);
     p_sCg(p);
-    memcpy(p->start,p->start0,sizeof(double)*(p->design->dy+1));
+
+    std::copy(p->start0,p->start0+(p->design->dy+1),p->start);    
 
     // remove fourth column from design - column counting delta1
     rmPos(p->start,3,p->covs->dy+5+1);
@@ -1690,7 +1698,7 @@ void asamEM(pars *p){
 
     p_sCg(p);
     
-    // emil - start gets values in getFit - therefore ok with NAN values
+    // start gets values in getFit - therefore ok with NAN values
     for(int i=0;i<p->design->dy+2;i++)
       p->start[i]=NAN;
 
@@ -1728,7 +1736,7 @@ void asamEM(pars *p){
       }
     }             
     
-    // emil - has to skip both R2, Rm, delta1 and delta2 (column 2, 3, 4 and 5 design matrix) - obtained by giving coef of 0 (start values)
+    // has to skip both R2, Rm, delta1 and delta2 (column 2, 3, 4 and 5 design matrix) - obtained by giving coef of 0 (start values)
     for(int i=p->design->dy;i>4;i--){
       // should let first column be, and move rest of the values 4 index up, (2nd->6th, 3rd->7th,...)
       p->start[i] = p->start[i-4];
@@ -1753,7 +1761,7 @@ void asamEM(pars *p){
     
     p_sCg(p);
     
-    // emil - start gets values in getFit - these are the coefs
+    // start gets values in getFit - these are the coefs
     for(int i=0;i<p->design->dy+4;i++)
       p->start[i]=NAN;
 
@@ -1775,7 +1783,7 @@ void asamEM(pars *p){
     // generating full design matrix for likelihood calculations
     mkDesign(p);
             
-    // emil - has to skip both R1, R2, Rm, delta1 and delta2 (column 1, 2, 3, 4 and 5 design matrix)
+    // has to skip both R1, R2, Rm, delta1 and delta2 (column 1, 2, 3, 4 and 5 design matrix)
     for(int i=p->design->dy;i>4;i--){
       // move values 5 indexes up (1st->6th, 2nd->7th,...) - for generating likelihood
       p->start[i] = p->start[i-5];

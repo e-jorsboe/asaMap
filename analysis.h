@@ -45,6 +45,8 @@ typedef struct{
   double *weights;
   Matrix<double> *design;
   Matrix<double> *ysCgs;
+
+  Matrix<double> *expD;
   kstring_t bufstr;
   kstring_t tmpstr;
 }pars;

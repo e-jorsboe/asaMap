@@ -8,24 +8,24 @@
 #include <signal.h>
 #include <libgen.h>
 
-typedef struct{
+struct myres{
   int index; //site 
   char *res; //<-results as char*
-}myres;
 
-
-// results in vector
-std::vector<myres> myresults;
+  myres(int index1, char* res1){
+    index=index1;
+    res=res1;
+  }
+  
+};
 
 bool myresSort (myres a,myres b){  
   return a.index<b.index;
 }
 
-int SIG_COND=1;//if we catch signal then quit program nicely
-
 // how many sites analysed in threaded mode
-int analysedThreadSites = 0;
-int parsedThreadSites = 0;
+int parsedSites = 0;
+int SIG_COND=1;//if we catch signal then quit program nicely
 
 void kill_pars(pars *p,size_t l){
   
@@ -68,14 +68,18 @@ struct worker_args_t{
   std::vector<double> start;//start. Initialized as long as len. Just to be sure.
   Matrix<double> freq;
   Matrix<double> cov;
+  std::vector<std::vector<int> > cats2;
   std::vector<char*> loci;
+  std::vector<myres> myresults;  
   int i;
   FILE* tmpFile;
   char* tmpFileName;
   int nSites;
+  char buf[4096];
+  
 
   // construct for worker_args_t struct
-  worker_args_t(int &first1,int &second1,pars* p1,char** d1,std::vector<double> phe1,std::vector<double> ad1,std::vector<double> start1,Matrix<double> &freq1,Matrix<double> &cov1,std::vector<char*> loci1,int &i1){
+  worker_args_t(int &first1,int &second1,pars* p1,char** d1,std::vector<double> phe1,std::vector<double> ad1,std::vector<double> start1,Matrix<double> &freq1,Matrix<double> &cov1,std::vector<char*> loci1,int &i1,std::vector<std::vector<int> > cats21,std::vector<myres> myresults1){
 
     first=first1;
     second=second1;
@@ -89,6 +93,8 @@ struct worker_args_t{
     loci=loci1;
     i=i1;
     nSites=freq.dx;
+    cats2=cats21;
+    myresults=myresults1;
     
   }
   
@@ -127,14 +133,14 @@ double sd(const std::vector<double> &phe){
 }
 
 
-// emil new random number generator
+// new random number generator
 void rstart(double *ary,size_t l, const std::vector<double> &phe, double fMin, double fMax){
   for(int i=0;i<l;i++){
     double f = (double)rand() / RAND_MAX;
     ary[i] = fMin + f * (fMax - fMin);
    //  fprintf(stderr,"ary[%d]:%f\n",i,ary[i]);
   } 
-  // emil - for sd estimate use sd of y
+  // for sd estimate use sd of y
   ary[l]=sd(phe);
 }
 
@@ -236,11 +242,13 @@ pars *init_pars(size_t l,size_t ncov,int model,int maxInter,double tole,std::vec
   }
   
   //copy it to the start0 which will be copied to start for each new site
-  // emil has to be + 4, because also needs to copy sd(y) - last value of start
+  // has to be + 4, because also needs to copy sd(y) - last value of start
   if(model==0){
-    memcpy(p->start0,p->start,sizeof(double)*(ncov+4));
+    std::copy(p->start,p->start+(ncov+4),p->start0);  
+    //memcpy(p->start0,p->start,sizeof(double)*(ncov+4));
   } else{
-    memcpy(p->start0,p->start,sizeof(double)*(ncov+6));
+    std::copy(p->start,p->start+(ncov+6),p->start0);  
+    //memcpy(p->start0,p->start,sizeof(double)*(ncov+6));
   }
   return p;
 }
@@ -328,10 +336,12 @@ void set_pars(pars *p, char *g,const std::vector<double> &phe, const std::vector
 
   // if add model - copy all starting values ncov + 4
   if(p->model==0){     
-    memcpy(p->start,p->start0,sizeof(double)*(p->covs->dy+4));        
+    std::copy(p->start0,p->start0+(p->covs->dy+4),p->start);
+    //memcpy(p->start,p->start0,sizeof(double)*(p->covs->dy+4));        
   } else{
     // if rec model - copy all starting values ncov + 6
-    memcpy(p->start,p->start0,sizeof(double)*(p->covs->dy+6));    
+    std::copy(p->start0,p->start0+(p->covs->dy+6),p->start);
+    //memcpy(p->start,p->start0,sizeof(double)*(p->covs->dy+6));    
   } 
 
   ksprintf(&p->bufstr,"%s%d\t%f\t%f\t",site,p->len,p->mafs[0],p->mafs[1]);
@@ -355,57 +365,42 @@ void *main_analysis_thread(void* threadarg){
     }
     
     // parsing site with index 100 (0-indexed so 101th site) - but will have parsed 100 sites
-    if(parsedThreadSites % 100==0){
-      fprintf(stderr,"Parsed sites:%i\n",parsedThreadSites);
+    if(parsedSites % 100==0){
+      fprintf(stderr,"Parsed sites:%i\n",parsedSites);
     }
-    
-    parsedThreadSites++;
-                   
-    int cats2[4] = {0,0,0,0};
-    
+
+    parsedSites++;    
+                           
     for(int x=0;x<td->p->len;x++){//similar to above but with transposed plink matrix
-      cats2[td->d[i][x]]++;
+      //because vector is only block long, has to start at 0 (first (i) - first), then 1 (first+1 (i+1) - first)
+      // otherwise starts at first, which might be much higher than the length of vector allocated
+      td->cats2[i-td->first][td->d[i][x]]+=1;
     }
-        
-    if((cats2[3]/(double)(cats2[0]+cats2[1]+cats2[2]))>0.1){
+
+    //checking that missingess is below 0.1
+    if((td->cats2[i-td->first][3]/(double)(td->cats2[i-td->first][0]+td->cats2[i-td->first][1]+td->cats2[i-td->first][2]))>0.1){
       fprintf(stderr,"skipping site[%d] due to excess missingness\n",i);
       continue;
     }
-        
-    //check that we observe atleast 10 obs of 2 different genotypes
-    int n=0;
-    
-    // changed i to 3, as we do not want to consider missing geno a different genotype
-    for(int j=0;j<3;j++)
-      if(cats2[j]>1)
-	n++;    
-    
+
     // checks that there are at least 2 different genos (1 might be missing)
-    if(n<2){
+    if((td->cats2[i-td->first][0]+td->cats2[i-td->first][1]+td->cats2[i-td->first][2])<2){
       fprintf(stderr,"skipping site[%d] due to categories filter\n",i);
       continue;
     }
         
     set_pars(td->p,td->d[i],td->phe,td->ad,td->freq.d[i],td->start,td->cov,td->loci[i],td->i);
-       
+        
     main_analysis((void*)td->p);
-    
+
     fprintf(td->tmpFile,"%s\t%s\n",td->p->bufstr.s,td->p->tmpstr.s);
     td->p->bufstr.l=td->p->tmpstr.l=0;
 
-    char buf[4096];
-    snprintf(buf,4096,"%s\t%s",td->p->bufstr.s,td->p->tmpstr.s);
+    snprintf(td->buf,4096,"%s\t%s",td->p->bufstr.s,td->p->tmpstr.s);
 
-    myres tmp;
-    
-    tmp.index=i;
-    tmp.res=strdup(buf);
-      
-    // push_back
-    myresults.push_back(tmp);
-
-    analysedThreadSites++;
-    
+    myres tmp(i,strdup(td->buf));
+    td->myresults.push_back(tmp);
+        
   }
  
   pthread_exit(0);
@@ -518,7 +513,6 @@ void wrap(const plink *plnk,const std::vector<double> &phe,const std::vector<dou
     kill_pars(p,plnk->x);         
     
   } else{
-
        
     int NumJobs = plnk->y;
     // has to read all parameters/data into this struct
@@ -543,9 +537,13 @@ void wrap(const plink *plnk,const std::vector<double> &phe,const std::vector<dou
     worker_args **all_args = new worker_args*[nThreads];
     
     int first = 0;
-    for(int i=0;i<nThreads;i++){            
+    for(int i=0;i<nThreads;i++){      
       int second = first + block;
-      all_args[i]=new worker_args(first,second,all_pars[i],d,phe,ad,start,freq,cov,loci,i);
+      //for handling missingness
+      std::vector< std::vector<int> > tmpvec(block, std::vector<int>(4,0));
+      //for storing results
+      std::vector<myres> resvec;
+      all_args[i]=new worker_args(first,second,all_pars[i],d,phe,ad,start,freq,cov,loci,i,tmpvec,resvec);
       first = first + block;
     }
 
@@ -561,11 +559,10 @@ void wrap(const plink *plnk,const std::vector<double> &phe,const std::vector<dou
       fp=fopen(buf,"wb");
       assert(fp!=NULL);
       all_args[i]->tmpFile=fp;
-      all_args[i]->tmpFileName=strdup(buf);      
+      all_args[i]->tmpFileName=strdup(buf);
     }
     
     pthread_t thread1[nThreads];
-
     
     // prints starting values
     if(all_pars[0]->model==0){
@@ -588,7 +585,6 @@ void wrap(const plink *plnk,const std::vector<double> &phe,const std::vector<dou
       }
       fprintf(stderr,"\n"); fprintf(logFile,"\n");      
     }
-
     
     // this has to be threaded version of main_analysis
     for (int i = 0; i < nThreads; i++)
@@ -598,21 +594,23 @@ void wrap(const plink *plnk,const std::vector<double> &phe,const std::vector<dou
     for (int i = 0; i < nThreads; i++)
       assert(pthread_join(thread1[i], NULL)==0);
     
-    std::sort(myresults.begin(),myresults.end(),myresSort);
+    int lengths = 0;
     
-    for(int i=0;i<myresults.size();i++){
-      fprintf(outFile,"%s\n",myresults[i].res);
+    for(int i=0;i<nThreads;i++){
+      lengths += all_args[i]->myresults.size();
+      std::sort( all_args[i]->myresults.begin(), all_args[i]->myresults.end(),myresSort);
+      for(int j=0;j<all_args[i]->myresults.size();j++){
+	fprintf(outFile,"%s\n",all_args[i]->myresults[j].res);
+      }
     }
-
-
     
     for(int i=0;i<nThreads;i++)
       kill_pars(all_pars[i],plnk->x);
     delete [] all_pars;
     
     // write how many sites analysed 
-    fprintf(stderr,"Number of analysed sites is:\t %i\n",analysedThreadSites);
-    fprintf(logFile,"Number of analysed sites is:\t %i\n",analysedThreadSites);
+    fprintf(stderr,"Number of analysed sites is:\t %i\n",lengths);
+    fprintf(logFile,"Number of analysed sites is:\t %i\n",lengths);
 
     fprintf(stderr,"Results written to:\t %s\n",outname);
     fprintf(logFile,"Results written to:\t %s\n",outname);
@@ -627,7 +625,6 @@ void wrap(const plink *plnk,const std::vector<double> &phe,const std::vector<dou
       delete all_args[i];
     }
     delete [] all_args;
-
     
   }
   
