@@ -76,6 +76,7 @@ struct worker_args_t{
   char* tmpFileName;
   int nSites;
   char buf[4096];
+  int nThreads;
   
 
   // construct for worker_args_t struct
@@ -560,6 +561,7 @@ void wrap(const plink *plnk,const std::vector<double> &phe,const std::vector<dou
       assert(fp!=NULL);
       all_args[i]->tmpFile=fp;
       all_args[i]->tmpFileName=strdup(buf);
+      all_args[i]->nThreads=nThreads;
     }
     
     pthread_t thread1[nThreads];

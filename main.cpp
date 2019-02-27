@@ -93,8 +93,9 @@ int main(int argc,char **argv){
   int model = 0;
   int regression = 0;
   //int mIter = 10;
-  //new value as in R-code
-  int mIter = 40;
+  //new value 40 in R-code
+  // however M0 doest not always converge with this
+  int mIter = 80;
   //double tol = 1e-8;
   //new value as in R-code
   double tol = 1e-4;
