@@ -311,9 +311,9 @@ void set_pars(pars *p, char *g,const std::vector<double> &phe, const std::vector
 	
 	p->qvec[p->len] = ad[i];
 
-	// only has number of covariates, in covariates file
+	p->covs->d[p->len][0] = 1;
+	// only has number of covariates, in covariates file	
 	for(int c=1;c<=cov.dy;c++){	     
-	  p->covs->d[p->len][0] = 1;
 	  p->covs->d[p->len][c] = cov.d[i][c-1];
 	}
 	p->len++;

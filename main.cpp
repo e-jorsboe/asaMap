@@ -178,9 +178,21 @@ int main(int argc,char **argv){
   
   plink *p = readplink(pname);  
   std::vector<char *> loci = readBim(pname);
-  Matrix<double> cov = getMatrixCheck(covname);
-  
+
   std::vector<double> pheno = getArrayCheck(phename);
+  
+  Matrix<double> cov;
+  
+  if(covname!=NULL){
+    cov = getMatrixCheck(covname);
+  } else{    
+    cov.mx=pheno.size();
+    cov.my=0;
+    cov.dx=pheno.size();
+    cov.dy=0;
+    cov.d=NULL;
+  }
+  
   std::vector<double> adprop(pheno.size());
   if(qname!=NULL){
     Matrix<double> Q = getMatrixCheck(qname);
@@ -259,11 +271,13 @@ int main(int argc,char **argv){
 
   delete [] outname2;
   fclose(outFile);
-  
-  for(int i=0;i<cov.dx;i++){
-    delete [] cov.d[i];
+
+  if(covname!=NULL){  
+    for(int i=0;i<cov.dx;i++){
+      delete [] cov.d[i];
+    }
+    delete [] cov.d;
   }
-  delete [] cov.d;
   
   for(int i=0;i<f.dx;i++){    
     delete [] f.d[i];
