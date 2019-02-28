@@ -7,6 +7,7 @@
 #include <pthread.h>
 #include <signal.h>
 #include <libgen.h>
+#include <assert.h>
 
 struct myres{
   int index; //site 
@@ -261,25 +262,44 @@ void check_pars(pars* p, const std::vector<double> &phe, Matrix<double> &cov){
   int interceptChecker = 0;
   // check if phenotype 0 or 1 - for quantitative
   int isBinaryQuan = 1;
-  for(int i=0;i<phe.size();i++){
-	//if logistic regression check if phenotypes are 0 or 1
-	if(p->regression==1){
-	  isBinaryQuan = 0;
-	  if(phe[i]!=0 and phe[i]!=1){
-	    fprintf(stderr,"Phenotypes are not binary (0 or 1) for logistic model!\n");    
-	    exit(1);
-	  }
-	} else{
-	  if(phe[i]!=0 and phe[i]!=1){
-	    isBinaryQuan = 0;
-	  }
-	}       
 
-	if(cov.d[i][0]==1){
-	  interceptChecker++;
-	}
+  for(int i=0;i<phe.size();i++){     
+    //if logistic regression check if phenotypes are 0 or 1
+    if(p->regression==1){
+      isBinaryQuan = 0;
+      
+      if(phe[i]!=0 and phe[i]!=1){
+	fprintf(stderr,"Phenotypes are not binary (0 or 1) for logistic model!\n");
+	exit(1);
+      }
+      
+    } else{
+      if(phe[i]!=0 and phe[i]!=1){
+	isBinaryQuan = 0;
+      }
+    }	     
   }
+
+  for(int j=0;j<cov.dy;j++){
+    for(int i=0;i<phe.size();i++){        
+      
+      if(cov.d[i][j]==1){
+	interceptChecker++;
+      }
+    }
     
+    // p->len is equal to number of indis in plink file
+    // if these are same length, means user has column of 1s in .cov file
+    if(interceptChecker==p->len){
+      fprintf(stderr,"Column of 1s for intercept should not be included in covariate,\n");
+      fprintf(stderr,"as this will be added automatically.\n");
+      exit(1);
+    }       
+    
+    interceptChecker=0;
+  }
+  
+  
   if(isBinaryQuan){
     fprintf(stderr,"\n");
     fprintf(stderr,"#######################################################################################\n");
@@ -289,14 +309,7 @@ void check_pars(pars* p, const std::vector<double> &phe, Matrix<double> &cov){
     fprintf(stderr,"#######################################################################################\n");
     fprintf(stderr,"\n");
   }
-
-  if(interceptChecker==p->len){
-    fprintf(stderr,"Column of 1s for intercept should not be included in covariate,\n");
-    fprintf(stderr,"as this will be added automatically.\n");    
-    exit(1);
-  }
-
-  
+     
 }
 
 void set_pars(pars *p, char *g,const std::vector<double> &phe, const std::vector<double> &ad, double *freq, std::vector<double> start, Matrix<double> &cov, char *site, int y){
@@ -313,8 +326,8 @@ void set_pars(pars *p, char *g,const std::vector<double> &phe, const std::vector
 
 	p->covs->d[p->len][0] = 1;
 	// only has number of covariates, in covariates file	
-	for(int c=1;c<=cov.dy;c++){	     
-	  p->covs->d[p->len][c] = cov.d[i][c-1];
+	for(int c=0;c<cov.dy;c++){	     
+	  p->covs->d[p->len][c+1] = cov.d[i][c];
 	}
 	p->len++;
     }
@@ -529,6 +542,8 @@ void wrap(const plink *plnk,const std::vector<double> &phe,const std::vector<dou
     for(int i=0;i<nThreads;i++){
       if(i==0){
 	all_pars[i]=init_pars(plnk->x,cov.dy,model,maxIter,tol,start,phe,regression,logFile,estSE,useM0R0,1);
+	// check that pheno and covariates are OK
+	check_pars(all_pars[i], phe, cov);		
       } else{
 	all_pars[i]=init_pars(plnk->x,cov.dy,model,maxIter,tol,start,phe,regression,logFile,estSE,useM0R0,0);
       }
