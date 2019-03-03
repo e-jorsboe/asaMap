@@ -62,10 +62,10 @@ void print_info(FILE *fp){
   fprintf(fp, "   -a <filename>       admixproportions (for source pop1) - either specify this or -Q\n");
   fprintf(fp, "   -Q <filename>       .Q file from ADMIXTURE - either specify this or -a\n");
   fprintf(fp, "   -f <filename>       allele frequencies (.P file)\n");
-  fprintf(fp, "   -m <INTEGER>        model 0=add 1=rec (default: 0)\n");
-  fprintf(fp, "   -l <INTEGER>        regression 0=linear regression, 1=logistic regression (default: 0)\n");
+  fprintf(fp, "   -m <INT>            model 0=add 1=rec (default: 0)\n");
+  fprintf(fp, "   -l <INT>            regression 0=linear regression, 1=logistic regression (default: 0)\n");
   fprintf(fp, "   -b <filename>       file containing the start\n");
-  fprintf(fp, "   -i <UINTEGER>       maximum iterations (default: 40)\n");
+  fprintf(fp, "   -i <INT>            maximum iterations (default: 80)\n");
   fprintf(fp, "   -t <FLOAT>          tolerance for breaking EM (default: 0.0001)\n");
   fprintf(fp, "   -r <FLOAT>          seed for rand\n");
   fprintf(fp, "   -P <INT>            number of threads\n");
@@ -233,7 +233,12 @@ int main(int argc,char **argv){
   assert(estSE==0 || estSE==1);
   // no standard error or standard error
   assert(useM0R0==0 || useM0R0==1);
+  // positive number of threads
+  assert(nThreads > 0);
+  // positive number of EM iterations
+  assert(mIter > 0);
 
+  
   if(nThreads > get_nprocs()){
     nThreads = get_nprocs();
     fprintf(stderr,"Requested more threads than avaible cores - nThreads has been set to %i\n",nThreads);
