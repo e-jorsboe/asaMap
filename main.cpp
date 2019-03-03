@@ -67,7 +67,7 @@ void print_info(FILE *fp){
   fprintf(fp, "   -b <filename>       file containing the start\n");
   fprintf(fp, "   -i <INT>            maximum iterations (default: 80)\n");
   fprintf(fp, "   -t <FLOAT>          tolerance for breaking EM (default: 0.0001)\n");
-  fprintf(fp, "   -r <FLOAT>          seed for rand\n");
+  fprintf(fp, "   -r <INT>            seed for rand\n");
   fprintf(fp, "   -P <INT>            number of threads\n");
   fprintf(fp, "   -e <INT>            estimate standard error of coefficients (0: no (default), 1: yes)\n");
   fprintf(fp, "   -w <INT>            run M0/R0 model that models effect of other allele (0: no, 1: yes (default))\n");  
@@ -237,6 +237,8 @@ int main(int argc,char **argv){
   assert(nThreads > 0);
   // positive number of EM iterations
   assert(mIter > 0);
+  // positive number for seed
+  assert(seed > 0);
 
   
   if(nThreads > get_nprocs()){
