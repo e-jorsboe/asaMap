@@ -79,23 +79,23 @@ pval(res$llh.M1.,res$llh.M4.,df=1)
 
 | model | parameters | notes | #effect Parameters |
 | --- | --- | --- | --- |
-| M0 | (\beta_1,\beta_2,\delta_1)\in R^3 | effect of non-assumed effect allele | 1 |
-| M1 | (\beta_1,\beta_2)\in R^2  | population specific effects | 2 |
-| M2 | \beta_1=0,\beta_2\in R | no effect in population  | 1 |
-| M3 | \beta_1\in R, \beta_2=0 | no effect in population 2 | 1 |
-| M4 | \beta_1=\beta_2\in R | same effect in both populations | 1 |
-| M5 | \beta_1=\beta_2=0 | no effect in any population | 0 |
+| M0 | (beta_1, beta_2, delta_1) in R^3 | effect of non-assumed effect allele | 1 |
+| M1 | (beta_1, beta_2)in R^2  | population specific effects | 2 |
+| M2 | beta_1=0, beta_2 in R | no effect in population 1  | 1 |
+| M3 | beta_1 in R, beta_2=0 | no effect in population 2 | 1 |
+| M4 | beta_1=beta_2 in R | same effect in both populations | 1 |
+| M5 | beta_1=beta_2=0 | no effect in any population | 0 |
 
 | model | parameters | notes | #effect Parameters |
 | --- | --- | --- | --- |
-| R0 | (\beta_1,\beta_m,\beta_2,\delta_1,\delta_2)\in R^5 | recessive effect of non-assumed effect alleles | 2 |
-| R1 | (\beta_1,\beta_m,\beta_2)\in R^3 | population specific effects | 3 |
-| R2 | \beta_1\in R,\beta_m=\beta_2\in R | same effect when one or both variant alleles are from pop 2 | 2 |
-| R3 | \beta_1=\beta_m\in R,\beta_2\in R | same effect when one or both variant alleles are from pop 1 | 2 |
-| R4 | \beta_1\in R,\beta_m=\beta_2=0 | only an effect when both variant alleles are from pop 1 | 1 |
-| R5 | \beta_1=\beta_m=0, \beta_2\in R | only an effect when both variant alleles are from pop 2 | 1 |
-| R6 | \beta_1=\beta_m=\beta_2\in R | same effect regardless of ancestry | 1 |
-| R7 | \beta_1=\beta_m=\beta_2=0 | no effect in any population | 0 |
+| R0 | (beta_1, beta_m, beta_2, delta_1, delta_2) in R^5 | recessive effect of non-assumed effect alleles | 2 |
+| R1 | (beta_1, beta_m, beta_2) in R^3 | population specific effects | 3 |
+| R2 | beta_1 in R, beta_m=beta_2 in R | same effect when one or both variant alleles are from pop 2 | 2 |
+| R3 | beta_1=beta_m in R, beta_2 in R | same effect when one or both variant alleles are from pop 1 | 2 |
+| R4 | beta_1 in R, beta_m=beta_2=0 | only an effect when both variant alleles are from pop 1 | 1 |
+| R5 | beta_1=beta_m=0, beta_2 in R | only an effect when both variant alleles are from pop 2 | 1 |
+| R6 | beta_1=beta_m=beta_2 in R | same effect regardless of ancestry | 1 |
+| R7 | beta_1=beta_m=beta_2=0 | no effect in any population | 0 |
 
 
 # Input files

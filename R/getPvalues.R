@@ -9,7 +9,7 @@ if(length(args)==0){
 
 fileName<-args[1]
 
-fileName1<-tail(unlist(strsplit(fileName,"/")),1)
+##fileName1<-tail(unlist(strsplit(fileName,"/")),1)
 
 df<-read.table(fileName,as.is=TRUE,header=TRUE)
 
@@ -41,4 +41,4 @@ if(ncol(df)==16){
 
 Ps<-Ps[ Ps[,"Chromo"]%in%1:22,]
   
-write.table(Ps,paste0(fileName1,".Pvalues"),col=T,row=F,qu=F)
+write.table(Ps,paste0(fileName,".Pvalues"),col=T,row=F,qu=F)
