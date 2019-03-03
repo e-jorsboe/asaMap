@@ -23,12 +23,12 @@ Options:
    -a <filename>       admixproportions (for source pop1)
    -Q <filename>       .Q file from ADMIXTURE
    -f <filename>       allele frequencies (.P file)
-   -m <INTEGER>        model 0=add 1=rec (default: 0)
-   -l <INTEGER>        regression 0=linear regression, 1=logistic regression (default: 0)
+   -m <INT>            model 0=add 1=rec (default: 0)
+   -l <INT>            regression 0=linear regression, 1=logistic regression (default: 0)
    -b <filename>       file containing the start
-   -i <UINTEGER>       maximum iterations (default: 40)
+   -i <INT>            maximum iterations (default: 40)
    -t <FLOAT>          tolerance for breaking EM (default: 0.0001)
-   -r <FLOAT>          seed for rand
+   -r <INT>            seed for rand
    -P <INT>            number of threads
    -e <INT>            estimate standard error of coefficients (0: no (default), 1: yes)
    -w <INT>            run M0/R0 model that models effect of other allele (0: no, 1: yes (default))
@@ -80,7 +80,7 @@ pval(res$llh.M1.,res$llh.M4.,df=1)
 | model | parameters | notes | #effect Parameters |
 | --- | --- | --- | --- |
 | M0 | (beta_1, beta_2, delta_1) in R^3 | effect of non-assumed effect allele | 1 |
-| M1 | (beta_1, beta_2)in R^2  | population specific effects | 2 |
+| M1 | (beta_1, beta_2) in R^2  | population specific effects | 2 |
 | M2 | beta_1=0, beta_2 in R | no effect in population 1  | 1 |
 | M3 | beta_1 in R, beta_2=0 | no effect in population 2 | 1 |
 | M4 | beta_1=beta_2 in R | same effect in both populations | 1 |
