@@ -24,6 +24,9 @@ bool myresSort (myres a,myres b){
   return a.index<b.index;
 }
 
+// global variable for terminating program
+int kill_all = 3;
+
 // how many sites analysed in threaded mode
 int parsedSites = 0;
 int SIG_COND=1;//if we catch signal then quit program nicely
@@ -53,7 +56,13 @@ void kill_pars(pars *p,size_t l){
 
 void handler(int s) {
 
-  fprintf(stderr,"Caught SIGNAL: %d will try to exit nicely (no more threads are created, we will wait for the current threads to finish)\n",s);
+  if(kill_all==3)
+    fprintf(stderr,"Caught SIGNAL: %d will try to exit nicely (no more threads are created, we will wait for the current threads to finish)\n",s);
+  if(--kill_all!=3)
+    fprintf(stderr,"\n\t-> If you really want to exit uncleanly ctrl+c: %d more times\n",kill_all+1);
+  fflush(stderr);
+  if(!kill_all)
+    exit(0);
   SIG_COND=0;
   
 }
