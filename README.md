@@ -1,7 +1,7 @@
 # asaMap
 
 Article
-http://biorxiv.org/content/early/2015/01/22/014001
+https://www.biorxiv.org/content/10.1101/014001v3
 
 The implementation is still a work in progress. More features might be added at some point:
 -- Poisson regression
@@ -117,7 +117,7 @@ A file with each individuals phenotypes on each line. e.g., has to have same num
 -1.04224674183241
 0.0881848860116932
 ```
-### extra covariates (in addition to the intersept and genotypes)
+### extra covariates (in addition to the intercept and genotypes)
 A file where each column is a covariate and each row is an individual - should NOT have columns of 1s for intercept (intercept will be included automatically).
 This file has to have same number of rows as phenotype file and .fam file.
 ```
