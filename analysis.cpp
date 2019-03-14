@@ -155,7 +155,7 @@ void rstart(double *ary,size_t l, const std::vector<double> &phe, double fMin, d
   ary[l]=sd(phe);
 }
 
-pars *init_pars(size_t l,size_t ncov,int model,int maxInter,double tole,std::vector<double> &start, const std::vector<double> &phe, int regression, FILE* logFile, int estSE, int useM0R0, int header){
+pars *init_pars(size_t l,size_t ncov,int model,int maxInter,double tole,std::vector<double> &start, const std::vector<double> &phe, int regression, FILE* logFile, int estSE, int useM0R0, int header, int primeCoefs){
   
   pars *p=new pars;
   p->len=l;
@@ -178,6 +178,7 @@ pars *init_pars(size_t l,size_t ncov,int model,int maxInter,double tole,std::vec
   p->regression = regression;
   p->estSE = estSE;
   p->useM0R0 = useM0R0;
+  p->primeCoefs = primeCoefs;
   
   if(model==0){
     // for the add model where design matrix has B1, B2, A1, covs
@@ -431,7 +432,7 @@ void *main_analysis_thread(void* threadarg){
 }
 
 
-void wrap(const plink *plnk,const std::vector<double> &phe,const std::vector<double> &ad,Matrix<double> &freq,int model,std::vector<double> start,Matrix<double> &cov,int maxIter,double tol,std::vector<char*> &loci,int nThreads,FILE* outFile, FILE* logFile, int regression, int estSE, int useM0R0,char* outname){
+void wrap(const plink *plnk,const std::vector<double> &phe,const std::vector<double> &ad,Matrix<double> &freq,int model,std::vector<double> start,Matrix<double> &cov,int maxIter,double tol,std::vector<char*> &loci,int nThreads,FILE* outFile, FILE* logFile, int regression, int estSE, int useM0R0,char* outname, int primeCoefs){
 
   char **d = new char*[plnk->y];//transposed of plink->d. Not sure what is best, if we filterout nonmissing anyway.
   for(int i=0;i<plnk->y;i++){
@@ -451,7 +452,7 @@ void wrap(const plink *plnk,const std::vector<double> &phe,const std::vector<dou
   if(nThreads==1){
     
     //we prep for threading. By using encapsulating all data need for a site in struct called pars
-    pars *p=init_pars(plnk->x,cov.dy,model,maxIter,tol,start,phe,regression,logFile,estSE,useM0R0,1);
+    pars *p=init_pars(plnk->x,cov.dy,model,maxIter,tol,start,phe,regression,logFile,estSE,useM0R0,1,primeCoefs);
     
     // check that pheno and covariates are OK
     check_pars(p, phe, cov);
@@ -550,11 +551,11 @@ void wrap(const plink *plnk,const std::vector<double> &phe,const std::vector<dou
     // to only have header included in the first thread
     for(int i=0;i<nThreads;i++){
       if(i==0){
-	all_pars[i]=init_pars(plnk->x,cov.dy,model,maxIter,tol,start,phe,regression,logFile,estSE,useM0R0,1);
+	all_pars[i]=init_pars(plnk->x,cov.dy,model,maxIter,tol,start,phe,regression,logFile,estSE,useM0R0,1,primeCoefs);
 	// check that pheno and covariates are OK
 	check_pars(all_pars[i], phe, cov);		
       } else{
-	all_pars[i]=init_pars(plnk->x,cov.dy,model,maxIter,tol,start,phe,regression,logFile,estSE,useM0R0,0);
+	all_pars[i]=init_pars(plnk->x,cov.dy,model,maxIter,tol,start,phe,regression,logFile,estSE,useM0R0,0,primeCoefs);
       }
 
     }

@@ -1139,7 +1139,7 @@ void controlEM(pars *p){
     llh0=llh1;
     std::copy(p->start,p->start+(p->design->dy+1),pars0);  
     //memcpy(pars0,p->start,sizeof(double)*(p->design->dy+1));
-    
+   
   }
   if(p->estSE==1){
     standardError(p->start,p->design,p->ysCgs,p->pheno,p->len,p->p_sCg,p->regression,p->SE,p->weights,p->index);
@@ -1231,24 +1231,25 @@ void asamEM(pars *p){
     
       mkDesign(p);
       p_sCg(p);
-                  
-      p->expD = expectedDesign(p);    
-      
-      if(p->regression==0){
-#ifdef EIGEN
-	tmp = getFit2(p->start,p->ys,p->expD->d,NULL,p->expD->dx,p->expD->dy,-1);
-#else
-	tmp = getFit(p->start,p->ys,p->expD->d,NULL,p->expD->dx,p->expD->dy,-1);
-#endif      
-      } else{
-#ifdef EIGEN
-	tmp = getFitBin2(p->start,p->ys,p->expD->d,NULL,p->expD->dx,p->expD->dy,-1);
-#else
-	tmp = getFitBin(p->start,p->ys,p->expD->d,NULL,p->expD->dx,p->expD->dy,-1);
-#endif      
-      }
 
-      kill(p->expD);
+      // prime coefs or not or just use start every time
+      if(p->primeCoefs){                  
+	p->expD = expectedDesign(p);    	
+	if(p->regression==0){
+#ifdef EIGEN
+	  tmp = getFit2(p->start,p->ys,p->expD->d,NULL,p->expD->dx,p->expD->dy,-1);
+#else
+	  tmp = getFit(p->start,p->ys,p->expD->d,NULL,p->expD->dx,p->expD->dy,-1);
+#endif      
+	} else{
+#ifdef EIGEN
+	  tmp = getFitBin2(p->start,p->ys,p->expD->d,NULL,p->expD->dx,p->expD->dy,-1);
+#else
+	  tmp = getFitBin(p->start,p->ys,p->expD->d,NULL,p->expD->dx,p->expD->dy,-1);
+#endif      
+	}	
+	kill(p->expD);	
+      }
       
       if(maf0 && maf1){
 	controlEM(p);
@@ -1266,39 +1267,43 @@ void asamEM(pars *p){
 
       rmPos(p->start,2,p->covs->dy+3+1);
       rmCol(p->design,2);
-            
-      p->expD = expectedDesign(p);    
-      
-      if(p->regression==0){
-#ifdef EIGEN
-	tmp = getFit2(p->start,p->ys,p->expD->d,NULL,p->expD->dx,p->expD->dy,-1);
-#else
-	tmp = getFit(p->start,p->ys,p->expD->d,NULL,p->expD->dx,p->expD->dy,-1);
-#endif      
-      } else{
-#ifdef EIGEN
-	tmp = getFitBin2(p->start,p->ys,p->expD->d,NULL,p->expD->dx,p->expD->dy,-1);
-#else
-	tmp = getFitBin(p->start,p->ys,p->expD->d,NULL,p->expD->dx,p->expD->dy,-1);
-#endif      
-      }
 
-      kill(p->expD);	
+      // prime coefs or not or just use start every time
+      if(p->primeCoefs){                
+	p->expD = expectedDesign(p);    	
+	if(p->regression==0){
+#ifdef EIGEN
+	  tmp = getFit2(p->start,p->ys,p->expD->d,NULL,p->expD->dx,p->expD->dy,-1);
+#else
+	  tmp = getFit(p->start,p->ys,p->expD->d,NULL,p->expD->dx,p->expD->dy,-1);
+#endif      
+	} else{
+#ifdef EIGEN
+	  tmp = getFitBin2(p->start,p->ys,p->expD->d,NULL,p->expD->dx,p->expD->dy,-1);
+#else
+	  tmp = getFitBin(p->start,p->ys,p->expD->d,NULL,p->expD->dx,p->expD->dy,-1);
+#endif      
+	}	
+	kill(p->expD);	
+      }
       
     } else{
       
       //////////// do M1 ///////////////    
-      //remove column3 and third value from start M0
-      
+      //remove column3 and third value from start M0      
       mkDesign(p);
       p_sCg(p);
-      //reuse coefs from M0 for faster converging of M1 model
-      
+
+      if(not p->primeCoefs){          
+	std::copy(p->start0,p->start0+(p->design->dy+1),p->start);
+      }
+                  
       // remove third column from design - column counting A1, remember start has sd(y) at the end (one longer)
       rmPos(p->start,2,p->covs->dy+3+1);
       rmCol(p->design,2);
-    }
       
+    }
+
     if(maf0 && maf1){
       controlEM(p);
       printRes(p,2); 
@@ -1313,13 +1318,28 @@ void asamEM(pars *p){
     
     mkDesign(p);
     p_sCg(p);
+
+    if(not p->primeCoefs){
+      std::copy(p->start0,p->start0+(p->design->dy+1),p->start);
+
+      // remove B2 second in design, remember start has sd(y) at the end (one longer)
+      rmPos(p->start,0,p->covs->dy+3+1);    
+      rmCol(p->design,0);
+      // remove A1 third in design (NB!! now second cause first was removed), remember start has sd(y) at the end (one longer)
+      // also remove value from start, as these values were copied anew and therefore have all values
+      rmPos(p->start,1,p->covs->dy+2+1);
+      rmCol(p->design,1);
+      
+    } else{
     
-    // remove B2 second in design, remember start has sd(y) at the end (one longer)
-    rmPos(p->start,0,p->covs->dy+3+1);    
-    rmCol(p->design,0);
-    // remove A1 third in design (NB!! now second cause first was removed), remember start has sd(y) at the end (one longer)
-    rmCol(p->design,1);
-        
+      // remove B2 second in design, remember start has sd(y) at the end (one longer)
+      rmPos(p->start,0,p->covs->dy+3+1);    
+      rmCol(p->design,0);
+      // remove A1 third in design (NB!! now second cause first was removed), remember start has sd(y) at the end (one longer)
+      rmCol(p->design,1);
+      
+    }
+    
     if(maf0){
       controlEM(p);
       printRes(p,1); 
@@ -1333,6 +1353,7 @@ void asamEM(pars *p){
     mkDesign(p);
     p_sCg(p);
 
+    
     // memcpy is not thread safe
     std::copy(p->start0,p->start0+(p->design->dy+1),p->start);    
 
@@ -1340,10 +1361,13 @@ void asamEM(pars *p){
     rmPos(p->start,2,p->covs->dy+3+1);
     rmCol(p->design,2);
 
-    // copies coefs from M1, for faster convergence
-    for(int i=0;i<p->covs->dy+2+1;i++){
-      p->start[i]=saveStart[i];
-    }
+
+    if(p->primeCoefs){
+       // copies coefs from M1, for faster convergence
+       for(int i=0;i<p->covs->dy+2+1;i++){
+	 p->start[i]=saveStart[i];
+       }
+     }
     
     // remove B2 second in design, remember start has sd(y) at the end (one longer)
     rmPos(p->start,1,p->covs->dy+2+1);
@@ -1363,7 +1387,6 @@ void asamEM(pars *p){
     for(int i=0;i<p->covs->dx;i++){
       p->design->d[i][0] = p->gs[i];
       for(int j=0;j<p->covs->dy;j++)
-	// not sure if this is necessary
 	p->design->d[i][j+1] = p->covs->d[i][j];
     }
     p->design->dx=p->covs->dx;
@@ -1459,16 +1482,17 @@ void asamEM(pars *p){
     printRes(p,0);
 
   } else{
-        
+    
     //////////// do R0 - model with also delta1 and delta2 (rec for alternative allele) ///////////////
+    
+    if(p->useM0R0){
       
-      if(p->useM0R0){
-	
-	mkDesign(p);
-	p_sCg(p);
-	
-	p->expD = expectedDesign(p);    
-	
+      mkDesign(p);
+      p_sCg(p);
+      
+      // prime coefs or not or just use start every time
+      if(p->primeCoefs){	
+	p->expD = expectedDesign(p);    	
 	if(p->regression==0){
 #ifdef EIGEN
 	  tmp = getFit2(p->start,p->ys,p->expD->d,NULL,p->expD->dx,p->expD->dy,-1);
@@ -1481,26 +1505,35 @@ void asamEM(pars *p){
 #else
 	  tmp = getFitBin(p->start,p->ys,p->expD->d,NULL,p->expD->dx,p->expD->dy,-1);
 #endif      
-	}
-
-	if(maf0 && maf1){
-	  controlEM(p);
-	  printRes(p,0); 
-	} else{
-	  printNan(p,0);
-	}
-	
+	}	
 	kill(p->expD);
-		
       }
       
-      if(not p->useM0R0){ 
-	
-	mkDesign(p);
-	p_sCg(p);
-	
-	p->expD = expectedDesign(p);    
-	
+      if(maf0 && maf1){
+	controlEM(p);
+	printRes(p,0); 
+      } else{
+	printNan(p,0);
+      }
+      
+    }
+    
+    if(not p->useM0R0){ 
+      
+      mkDesign(p);
+      p_sCg(p);
+      
+      // remove fourth column from design - column counting delta1
+      rmPos(p->start,3,p->covs->dy+5+1);
+      rmCol(p->design,3);
+      
+      // remove fifth column from design (now fourth because fifth column was removed) - delta2
+      rmPos(p->start,3,p->covs->dy+4+1);
+      rmCol(p->design,3);
+      
+      // prime coefs or not or just use start every time
+      if(p->primeCoefs){	
+	p->expD = expectedDesign(p);    	
 	if(p->regression==0){
 #ifdef EIGEN
 	  tmp = getFit2(p->start,p->ys,p->expD->d,NULL,p->expD->dx,p->expD->dy,-1);
@@ -1513,28 +1546,32 @@ void asamEM(pars *p){
 #else
 	  tmp = getFitBin(p->start,p->ys,p->expD->d,NULL,p->expD->dx,p->expD->dy,-1);
 #endif      
-	}
-	
-	kill(p->expD);		
-	
-      } else{
-        
-	//////////// do R1 ///////////////    
-        
-	mkDesign(p);
-	p_sCg(p);
-	//resue coefs from R0, just remove the terms not used in this model
-	
-	// remove fourth column from design - column counting delta1
-	rmPos(p->start,3,p->covs->dy+5+1);
-	rmCol(p->design,3);
-	
-	// remove fifth column from design (now fourth because fifth column was removed) - delta2
-	rmPos(p->start,3,p->covs->dy+4+1);
-	rmCol(p->design,3);
-	
+	}	
+	kill(p->expD);	
       }
       
+    } else{
+      
+      //////////// do R1 ///////////////    
+      
+      mkDesign(p);
+      p_sCg(p);
+      //resue coefs from R0, just remove the terms not used in this model
+
+      if(not p->primeCoefs){          
+	std::copy(p->start0,p->start0+(p->design->dy+1),p->start);
+      }
+                 
+      // remove fourth column from design - column counting delta1
+      rmPos(p->start,3,p->covs->dy+5+1);
+      rmCol(p->design,3);
+	
+      // remove fifth column from design (now fourth because fifth column was removed) - delta2
+      rmPos(p->start,3,p->covs->dy+4+1);
+      rmCol(p->design,3);
+      
+    }
+        
     if(maf0 && maf1){
       controlEM(p);
       printRes(p,3); 
@@ -1543,34 +1580,47 @@ void asamEM(pars *p){
     }
     
     double* saveStartRec = p->start;
-       
+    
     //////////// do R2 ///////////////
     //remove column2 and second value from start M2    
     
     mkDesign(p);
     p_sCg(p);
-
+    
     // generating second column: Rm + R2
     for(int i=0;i<p->design->dx;i++){
       p->design->d[i][1] = p->design->d[i][1] + p->design->d[i][2];
     }
 
-    // remove third column from design - column counting delta1
-    rmCol(p->design,2);
+    if(not p->primeCoefs){
+      std::copy(p->start0,p->start0+(p->design->dy+1),p->start);
+      // remove fourth column from design - column counting delta1
+      rmPos(p->start,3,p->covs->dy+5+1);    
+      rmCol(p->design,3);
+      
+      // remove fifth column from design (now fourth because fifth column was removed) - delta2
+      rmPos(p->start,3,p->covs->dy+4+1);    
+      rmCol(p->design,3);
+                 
+    } else{
+      // remove fourth column from design - column counting delta1
+      rmCol(p->design,3);
+      
+      // remove fifth column from design (now fourth because fifth column was removed) - delta2
+      rmCol(p->design,3);
+            
+    }
 
-    // remove fifth column from design (now fourth because fifth column was removed) - delta2
-    rmCol(p->design,3);
-       
     // remove Rm third in design, remember start has sd(y) at the end (one longer)
     rmPos(p->start,2,p->covs->dy+3+1);    
-    rmCol(p->design,2);            
+    rmCol(p->design,2);
     
     if(maf0 && maf1){
       controlEM(p);
       printRes(p,2); 
     } else{
       printNan(p,2);
-    }           
+    }
      
     //////////// do R3 ///////////////
     //remove column1 and first value from start M3    
@@ -1578,29 +1628,33 @@ void asamEM(pars *p){
     mkDesign(p);
     p_sCg(p);
     
-    std::copy(p->start0,p->start0+(p->design->dy+1),p->start);    
-
+    
     // generating first column: Rm + R1
     for(int i=0;i<p->design->dx;i++){      
       p->design->d[i][0] = p->design->d[i][0] + p->design->d[i][2];
     }
 
+    std::copy(p->start0,p->start0+(p->design->dy+1),p->start);
+
     // remove fourth column from design - column counting delta1
     rmPos(p->start,3,p->covs->dy+5+1);
     rmCol(p->design,3);
-
+    
     // remove fifth column from design (now fourth because fifth column was removed) - delta2
     rmPos(p->start,3,p->covs->dy+4+1);
     rmCol(p->design,3);
-
-    // copies coefs from R1, for faster convergence
-    for(int i=0;i<p->covs->dy+2+1;i++){
-      p->start[i]=saveStartRec[i];
-    }
-  
+    
     // remove Rm third in design, remember start has sd(y) at the end (one longer)
     rmPos(p->start,2,p->covs->dy+3+1);    
     rmCol(p->design,2);
+            
+    if(not p->primeCoefs){
+      // copies coefs from R1, for faster convergence
+      for(int i=0;i<p->covs->dy+2+1;i++){
+	p->start[i]=saveStartRec[i];
+      }
+
+    }
     
     if(maf0 && maf1){
       controlEM(p);
@@ -1616,26 +1670,29 @@ void asamEM(pars *p){
     p_sCg(p);
 
     std::copy(p->start0,p->start0+(p->design->dy+1),p->start);
-        
+    
     // remove fourth column from design - column counting delta1
     rmPos(p->start,3,p->covs->dy+5+1);
     rmCol(p->design,3);
-
+    
     // remove fifth column from design (now fourth because fifth column was removed) - delta2
     rmPos(p->start,3,p->covs->dy+4+1);
     rmCol(p->design,3);
-
-    // copies coefs from R1, for faster convergence
-    for(int i=0;i<p->covs->dy+2+1;i++){
-      p->start[i]=saveStartRec[i];
-    }
         
+    if(not p->primeCoefs){
+      // copies coefs from R1, for faster convergence
+      for(int i=0;i<p->covs->dy+2+1;i++){
+	p->start[i]=saveStartRec[i];
+      }
+      
+    }
+    
     // remove R2 second in design, remember start has sd(y) at the end (one longer)
     rmPos(p->start,1,p->covs->dy+3+1);    
     rmCol(p->design,1);        
     // remove Rm now second in design (because second already removed), remember start has sd(y) at the end (one longer)    
     rmPos(p->start,1,p->covs->dy+2+1);    
-    rmCol(p->design,1);   
+    rmCol(p->design,1);
     
     if(maf1){
       controlEM(p);
@@ -1649,9 +1706,9 @@ void asamEM(pars *p){
 
     mkDesign(p);
     p_sCg(p);
-
+    
     std::copy(p->start0,p->start0+(p->design->dy+1),p->start);    
-
+    
     // remove fourth column from design - column counting delta1
     rmPos(p->start,3,p->covs->dy+5+1);
     rmCol(p->design,3);
@@ -1659,20 +1716,23 @@ void asamEM(pars *p){
     // remove fifth column from design (now fourth because fifth column was removed) - delta2
     rmPos(p->start,3,p->covs->dy+4+1);
     rmCol(p->design,3);
-
-    // copies coefs from R1, for faster convergence
-    for(int i=0;i<p->covs->dy+2+1;i++){
-      p->start[i]=saveStartRec[i];
+    
+    if(not p->primeCoefs){
+      // copies coefs from R1, for faster convergence
+      for(int i=0;i<p->covs->dy+2+1;i++){
+	p->start[i]=saveStartRec[i];
+      }      
+      
     }
-               
+    
     // remove R1 first in design, remember start has sd(y) at the end (one longer)
     rmPos(p->start,0,p->covs->dy+3+1);    
     rmCol(p->design,0);        
     // remove Rm now second in design (because first already removed), remember start has sd(y) at the end (one longer)    
     rmPos(p->start,1,p->covs->dy+2+1);    
     rmCol(p->design,1);   
-
-     if(maf1){
+            
+    if(maf1){
       controlEM(p);
       printRes(p,1); 
     } else{

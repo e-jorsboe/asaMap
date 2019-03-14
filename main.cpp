@@ -70,7 +70,8 @@ void print_info(FILE *fp){
   fprintf(fp, "   -r <INT>            seed for rand\n");
   fprintf(fp, "   -P <INT>            number of threads\n");
   fprintf(fp, "   -e <INT>            estimate standard error of coefficients (0: no (default), 1: yes)\n");
-  fprintf(fp, "   -w <INT>            run M0/R0 model that models effect of other allele (0: no, 1: yes (default))\n");  
+  fprintf(fp, "   -w <INT>            run M0/R0 model that models effect of other allele (0: no, 1: yes (default))\n");
+  fprintf(fp, "   -C <INT>            prime coefficiens of models with estimates from previous models - e.g. using M0 coefs as starting point in M1 (0: no, 1: yes (default))\n");  
   fprintf(fp, "\n");
 }
 
@@ -106,6 +107,7 @@ int main(int argc,char **argv){
   int nThreads = 1;
   int estSE = 0;
   int useM0R0 = 1;
+  int primeCoefs = 1;
   
   argv++;
   while(*argv){
@@ -140,6 +142,8 @@ int main(int argc,char **argv){
     else if(strcmp(*argv,"-e")==0) estSE=atoi(*++argv);
     // run M0/R0 model or not
     else if(strcmp(*argv,"-w")==0) useM0R0=atoi(*++argv);
+    // prime coefs
+    else if(strcmp(*argv,"-C")==0) primeCoefs=atoi(*++argv);
     else{
       fprintf(stderr,"Unknown arg:%s\n",*argv);
       FILE *fp=stderr;
@@ -231,8 +235,10 @@ int main(int argc,char **argv){
   assert(regression==0 || regression==1);
   // no standard error or standard error
   assert(estSE==0 || estSE==1);
-  // no standard error or standard error
+  // run M0/R0 or not
   assert(useM0R0==0 || useM0R0==1);
+  // prime coefs or not
+  assert(primeCoefs==0 || primeCoefs==1);
   // positive number of threads
   assert(nThreads > 0);
   // positive number of EM iterations
@@ -250,7 +256,7 @@ int main(int argc,char **argv){
   
   fprintf(logFile,"Command had following options :\t -p %s -o %s ",pname,outname);
   fprintf(logFile,"-c %s -y %s -Q %s -a %s -f %s -i %i -t %f -m %i -l %i -r %i ",covname,phename,qname,adname,freqname,mIter,tol,model,regression,seed);
-  fprintf(logFile,"-P %i -b %s, -e %i, -w %i\n",nThreads,startname,estSE,useM0R0);
+  fprintf(logFile,"-P %i -b %s -e %i -w %i -C %i\n",nThreads,startname,estSE,useM0R0,primeCoefs);
   fprintf(logFile,"\n");
   fprintf(logFile,"Seed is: %i\n",seed);
   fprintf(logFile,"\n");
@@ -271,7 +277,7 @@ int main(int argc,char **argv){
   // flush to disk - or force to write to disk 
   fflush(logFile);
   
-  wrap(p,pheno,adprop,f,model,s,cov,mIter,tol,loci,nThreads,outFile,logFile,regression,estSE,useM0R0,outname2);
+  wrap(p,pheno,adprop,f,model,s,cov,mIter,tol,loci,nThreads,outFile,logFile,regression,estSE,useM0R0,outname2,primeCoefs);
   
   //cleanup
   kill_plink(p);
