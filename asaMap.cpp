@@ -972,34 +972,35 @@ void mkDesign(pars *p){
 
 double standardError(double *start,Matrix<double> *design,Matrix<double> *ysCgs,double *pheno,int nInd,double *p_sCg, int regression, double *SE, double* weights, int index){
   
-  double ret;
-  for(int i=0;i<design->dx;i++){
-    double m = 0;
-    for(int j=0;j<design->dy;j++){
-      m += design->d[i][j]*start[j];
-    }
-
-    if(regression==0){
-      // density function of normal distribution
-      m = logdnorm(pheno[i],m,start[design->dy]);      
-    } else{      
-      double prob = exp(m)/(exp(m)+1.0);
-      // now handling if p is 0 or 1 (makes it very small or large)
-      m = logbernoulli(pheno[i],prob);
-    }
-    
-    double tmp = m + log(p_sCg[i]);
-    ysCgs->d[(size_t)floor(i/4)][i % 4] = tmp;
-  }
-
   if(weights!=NULL){
+    
+    double ret;
+    for(int i=0;i<design->dx;i++){
+      double m = 0;
+      for(int j=0;j<design->dy;j++){
+	m += design->d[i][j]*start[j];
+      }
+      
+      if(regression==0){
+	// density function of normal distribution
+	m = logdnorm(pheno[i],m,start[design->dy]);      
+      } else{      
+	double prob = exp(m)/(exp(m)+1.0);
+	// now handling if p is 0 or 1 (makes it very small or large)
+	m = logbernoulli(pheno[i],prob);
+      }
+      
+      double tmp = m + log(p_sCg[i]);
+      ysCgs->d[(size_t)floor(i/4)][i % 4] = tmp;
+    }
     
     // dx is number of indis, dy is 4
     ysCgs->dx = (size_t) design->dx/4;
     ysCgs->dy = 4;
 
     // to get rowSums
-    double ycGs[ysCgs->dx];
+    std::vector<double> ycGs(ysCgs->dx);
+    
     for(int i=0;i<ysCgs->dx;i++){
       double tmp = 0;
       double maxval = ysCgs->d[i][0];
@@ -1022,8 +1023,7 @@ double standardError(double *start,Matrix<double> *design,Matrix<double> *ysCgs,
     }
     
     //need to flatten the weights, which is p(s|y,G,phi,Q,f)
-    // so first four values is for first indi, and so on...
-    
+    // so first four values is for first indi, and so on...    
     int a = 0;
     for(int i=0;i<ysCgs->dx;i++)
       for(int j=0;j<ysCgs->dy;j++){
@@ -1041,6 +1041,12 @@ double standardError(double *start,Matrix<double> *design,Matrix<double> *ysCgs,
       for(int x=0;x<design->dy;x++){
 	yTilde[i] += design->d[i][x]*start[x];
       }
+
+    // has to be expected value - mu, therefore using link function exp/(1+exp)
+    if(regression!=0){
+      for(int i=0;i<design->dx;i++)
+	yTilde[i] = exp(yTilde[i]) / (1+exp(yTilde[i]));
+    }
     
     int count=0;
 
@@ -1050,7 +1056,12 @@ double standardError(double *start,Matrix<double> *design,Matrix<double> *ysCgs,
         
     for(int i=0;i<design->dx;i++){
       // getting the residuals
-      tmp[i] = ((pheno[i]-yTilde[i]) / (start[design->dy]*start[design->dy]))*weights[i];        
+      if(regression!=0){
+	tmp[i] = (pheno[i]-yTilde[i]) * weights[i];
+      } else{
+	tmp[i] = ((pheno[i]-yTilde[i]) / (start[design->dy]*start[design->dy]))*weights[i];
+      }    
+         
       for(int x=0;x<design->dy;x++){                  
 	if(i % 4 == 3){
 	  // for each col take 4 rows for indis and take sum
@@ -1065,6 +1076,7 @@ double standardError(double *start,Matrix<double> *design,Matrix<double> *ysCgs,
     double invSummedDesign[design->dy*design->dy];
     for(int i=0;i<design->dy*design->dy;i++)
       invSummedDesign[i]=0;
+
     // this is doing the matrix product of (X)^T*W*X 
     for(int x=0;x<design->dy;x++)
       for(int y=0;y<design->dy;y++)
@@ -1081,30 +1093,51 @@ double standardError(double *start,Matrix<double> *design,Matrix<double> *ysCgs,
     
   } else{
     
-    std::vector<double> yTilde(design->dx);   
-        
+    std::vector<double> yTilde(design->dx);         
+    
     for(int i=0;i<design->dx;i++)
-      for(int x=0;x<design->dy;x++)
+      for(int x=0;x<design->dy;x++){
 	yTilde[i] += design->d[i][x]*start[x];
-    
-    
-    double meanGeno = 0;
-    for(int i=0;i<design->dx;i++){
-      meanGeno+=design->d[i][0];
+      }
+
+    // has to be expected value - mu, therefore using link function exp/(1+exp)
+    if(regression!=0){     
+      for(int i=0;i<design->dx;i++)
+	yTilde[i] = exp(yTilde[i]) / (1+exp(yTilde[i]));
     }
-    meanGeno=meanGeno/design->dx;
-    
-    double ts=0;
-    double denom=0;
+
+    std::vector<double> summedDesign(design->dx*design->dy); 
+    std::vector<double> tmp(design->dx);
+        
     for(int i=0;i<design->dx;i++){
-      // getting the residuals         
-      ts += (pheno[i]-yTilde[i])*(pheno[i]-yTilde[i]);
-      //x_i - x_avg
-      denom += (design->d[i][0]-meanGeno)*(design->d[i][0]-meanGeno);     
+        
+      if(regression!=0){
+	tmp[i] = (pheno[i]-yTilde[i]);
+      } else{
+	tmp[i] = ((pheno[i]-yTilde[i]) / (start[design->dy]*start[design->dy]));
+      }
+
+      for(int x=0;x<design->dy;x++){                  	
+	summedDesign[i*design->dy+x]=design->d[i][x]*tmp[i];	 		
+      }
     }
+
+    double invSummedDesign[design->dy*design->dy];
+    for(int i=0;i<design->dy*design->dy;i++)
+      invSummedDesign[i]=0;
     
-    SE[0]=sqrt((ts/(1.0*(design->dx)-design->dy))/denom);
+    // this is doing the matrix product of (X)^T*W*X 
+    for(int x=0;x<design->dy;x++)
+      for(int y=0;y<design->dy;y++)
+	for(int i=0;i<design->dx;i++){
+	  invSummedDesign[x*design->dy+y]+=summedDesign[i*design->dy+x]*summedDesign[i*design->dy+y];
+	}
+
+    // doing inv((X)^T*W*X)
+    svd_inverse(invSummedDesign, design->dy, design->dy);
     
+    SE[0]=sqrt(invSummedDesign[0]);
+
   }
   
 }
