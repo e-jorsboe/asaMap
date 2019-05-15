@@ -369,8 +369,9 @@ void set_pars(pars *p, char *g,const std::vector<double> &phe, const std::vector
   }
 
   char *save;
+  char* site2 = strdup(site);
   
-  p->chr = atoi(strtok_r(site,"\t",&save));
+  p->chr = atoi(strtok_r(site2,"\t",&save));
   p->pos = atoi(strtok_r(NULL,"\t",&save));
 
   ksprintf(&p->bufstr,"%s%d\t%f\t%f\t",site,p->len,p->mafs[0],p->mafs[1]);
