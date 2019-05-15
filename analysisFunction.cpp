@@ -10,7 +10,7 @@
 
 #define LENS 4096
 
-#define LOWER_BOUND 1e-20
+#define LOWER_BOUND 1e-12
 
 // checks if string is number
 int validNumber(char* someString){

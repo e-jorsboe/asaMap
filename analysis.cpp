@@ -366,7 +366,12 @@ void set_pars(pars *p, char *g,const std::vector<double> &phe, const std::vector
     // if rec model - copy all starting values ncov + 6
     std::copy(p->start0,p->start0+(p->covs->dy+6),p->start);
     //memcpy(p->start,p->start0,sizeof(double)*(p->covs->dy+6));    
-  } 
+  }
+
+  char *save;
+  
+  p->chr = atoi(strtok_r(site,"\t",&save));
+  p->pos = atoi(strtok_r(NULL,"\t",&save));
 
   ksprintf(&p->bufstr,"%s%d\t%f\t%f\t",site,p->len,p->mafs[0],p->mafs[1]);
 }

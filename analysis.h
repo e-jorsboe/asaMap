@@ -39,6 +39,8 @@ typedef struct{
   int maxIter;
   double tol;
   int index; //which site it is
+  int chr; // chr of site
+  int pos; // pos of site
   
   //tmp structs to avoid overusing stack
   double *pheno;

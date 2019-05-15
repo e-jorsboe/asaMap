@@ -15,7 +15,7 @@
 #endif
 
 // if under/overflow causes some value to go below this, use this value
-double lower_bound = 1e-20;
+double lower_bound = 1e-12;
 
 // fits a linear model using weighted least squares, 4 observations per individual -
 // up to 4 possible states, when geno is known
@@ -723,7 +723,7 @@ double updateEM(double *start,Matrix<double> *design,Matrix<double> *ysCgs,doubl
 
 
 //double updateEM(pars *p){
-double logupdateEM(double *start,Matrix<double> *design,Matrix<double> *ysCgs,double *pheno,int nInd,double *p_sCg, int regression, double* weights, int index){
+double logupdateEM(double *start,Matrix<double> *design,Matrix<double> *ysCgs,double *pheno,int nInd,double *p_sCg, int regression, double* weights, int index, int chr, int pos){
 #if 0
   for(int i=0;i<=design->dy;i++)
     fprintf(stderr,"%f ",start[i]);
@@ -743,12 +743,15 @@ double logupdateEM(double *start,Matrix<double> *design,Matrix<double> *ysCgs,do
     } else{      
       double prob = exp(m)/(exp(m)+1.0);
       // now handling if p is 0 or 1 (makes it very small or large)
-      m = logbernoulli(pheno[i],prob);
+      m = logbernoulli(pheno[i],prob);     
     }
     
     double tmp = m + log(p_sCg[i]);
     ysCgs->d[(size_t)floor(i/4)][i % 4] = tmp;
   }
+
+
+  
 
   // dx is number of indis, dy is 4
   ysCgs->dx = (size_t) design->dx/4;
@@ -787,7 +790,7 @@ double logupdateEM(double *start,Matrix<double> *design,Matrix<double> *ysCgs,do
 
       //check if issue with weights
       if(exp(ysCgs->d[i][j])!=exp(ysCgs->d[i][j]) or std::isinf(exp(ysCgs->d[i][j]))){
-	fprintf(stderr,"Issue with weights being nan or inf, for site %i\n",index);
+	fprintf(stderr,"Issue with weights being nan or inf, for site %i, chr and pos %i %i\n",index,chr,pos);
 	  return(-9);
 	}
     }
@@ -824,7 +827,7 @@ double logupdateEM(double *start,Matrix<double> *design,Matrix<double> *ysCgs,do
 }
 
 inline double updateEMP(pars *p){  
-  return logupdateEM(p->start,p->design,p->ysCgs,p->pheno,p->len,p->p_sCg,p->regression,p->weights,p->index);
+  return logupdateEM(p->start,p->design,p->ysCgs,p->pheno,p->len,p->p_sCg,p->regression,p->weights,p->index,p->chr,p->pos);
 }
 
 
@@ -1149,6 +1152,7 @@ void controlEM(pars *p){
   //memcpy(pars0,p->start,sizeof(double)*(p->design->dy+1));
   double llh0 = logLikeP(p);
   double llh1;
+  
   for(int i=0;i<p->maxIter;i++){
     llh1 = updateEMP(p);
     if(fabs(llh1-llh0)<p->tol and llh1 > 0){	 
@@ -1166,15 +1170,19 @@ void controlEM(pars *p){
 	p->start[i]=NAN;
       }
       llh1=NAN;
+  
       break;
+      
     }
-           
+    
     llh0=llh1;
     std::copy(p->start,p->start+(p->design->dy+1),pars0);  
     //memcpy(pars0,p->start,sizeof(double)*(p->design->dy+1));
    
   }
-  if(p->estSE==1){
+
+  // only do this if no problems with EM iterations
+  if(p->estSE==1 and llh1==llh1){
     standardError(p->start,p->design,p->ysCgs,p->pheno,p->len,p->p_sCg,p->regression,p->SE,p->weights,p->index);
   }
   
