@@ -1,7 +1,7 @@
 # asaMap
 
 Article
-https://www.biorxiv.org/content/10.1101/014001v3
+https://onlinelibrary.wiley.com/doi/full/10.1002/gepi.22200
 
 The implementation is still a work in progress. More features might be added at some point:
 -- Poisson regression
