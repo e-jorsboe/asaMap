@@ -3,6 +3,9 @@
 Article
 https://onlinelibrary.wiley.com/doi/full/10.1002/gepi.22200
 
+For more on this program see the popgen wiki:
+http://www.popgen.dk/software/index.php/AsaMap
+
 The implementation is still a work in progress. More features might be added at some point:
 -- Poisson regression
 -- larger number of populations (crazy high number of parameters - so maybe not the best idea)
