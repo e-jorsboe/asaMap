@@ -973,7 +973,7 @@ void mkDesign(pars *p){
 }
 
 
-double standardError(double *start,Matrix<double> *design,Matrix<double> *ysCgs,double *pheno,int nInd,double *p_sCg, int regression, double *SE, double* weights, int index){
+void standardError(double *start,Matrix<double> *design,Matrix<double> *ysCgs,double *pheno,int nInd,double *p_sCg, int regression, double *SE, double* weights, int index){
   
   if(weights!=NULL){
     
@@ -1031,11 +1031,10 @@ double standardError(double *start,Matrix<double> *design,Matrix<double> *ysCgs,
     for(int i=0;i<ysCgs->dx;i++)
       for(int j=0;j<ysCgs->dy;j++){
 	weights[a++] = exp(ysCgs->d[i][j]);
-	//check if issue with weights
-	if(exp(ysCgs->d[i][j])!=exp(ysCgs->d[i][j]) or std::isinf(exp(ysCgs->d[i][j]))){
-	  fprintf(stderr,"Issue with weights being nan or inf, for site %i\n",index);
-	  return(-9);
-	}
+	//check if issue with weights - SHOULD NOT HAPPEN AS THIS IS CHECKED PRIOR TO THIS
+	//if(exp(ysCgs->d[i][j])!=exp(ysCgs->d[i][j]) or std::isinf(exp(ysCgs->d[i][j]))){
+	//  fprintf(stderr,"Issue with weights being nan or inf, for site %i\n",index);
+	//}
       }
 
     std::vector<double> yTilde(design->dx);         

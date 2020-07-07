@@ -11,7 +11,7 @@ More features might be added at some point:
 -- larger number of populations 
 
 # Install
-git clone https://github.com/angsd/asaMap.git;
+git clone https://github.com/e-jorsboe/asaMap.git;
 cd asaMap;
 make
 
