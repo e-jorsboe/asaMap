@@ -14,7 +14,7 @@ fileName<-args[1]
 df<-read.table(fileName,as.is=TRUE,header=TRUE)
 
 getP<-function(col1,col2,df){
-  return(1-pchisq(-2*(col1-col2),df=df))
+  return(pchisq(-2*(col1-col2),df=df,lower.tail=F))
 }
 
 ## add
